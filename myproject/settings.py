@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from decouple import config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -145,11 +146,11 @@ MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Email settings using SendGrid
-SENDGRID_API_KEY = "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"  # Replace with your actual SendGrid API key
+SENDGRID_API_KEY = config('SENDGRID_API_KEY')  # Replace with your actual SendGrid API key
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.sendgrid.net'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'apikey'  # This is a fixed value for SendGrid
 EMAIL_HOST_PASSWORD = SENDGRID_API_KEY  # Use the API key as the password
-DEFAULT_FROM_EMAIL = 'olheron@avecproductions.com'  # Replace with your preferred sender email
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')  # Replace with your preferred sender email
