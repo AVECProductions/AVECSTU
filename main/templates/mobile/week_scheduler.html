@@ -1,155 +1,152 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Studio Scheduler</title>
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #000;
-            color: #ccc;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 10px;
-        }
+{% extends "base.html" %}
 
-        .header {
-            font-size: 24px;
-            margin-bottom: 10px;
-            text-align: center;
-        }
+{% block title %}Studio Scheduler{% endblock %}
 
-        .back-icon {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 24px;
-            color: #ccc;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-        }
+{% block extra_styles %}
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #ccc;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 10px;
+    }
 
-        .back-icon:hover {
-            color: #fff;
-        }
+    .header {
+        font-size: 24px;
+        margin-bottom: 10px;
+        text-align: center;
+    }
 
-        .navigator {
-            display: flex;
-            justify-content: space-between;
-            width: 100%;
-            max-width: 400px;
-            margin-bottom: 10px;
-        }
+    .back-icon {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        font-size: 24px;
+        color: #ccc;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
 
-        .nav-button {
-            background-color: #333;
-            color: #fff;
-            border: none;
-            padding: 10px;
-            cursor: pointer;
-            border-radius: 5px;
-        }
+    .back-icon:hover {
+        color: #fff;
+    }
 
-        .time-slot {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px;
-            background-color: #222;
-            margin: 5px 0;
-            border-radius: 5px;
-            text-decoration: none;
-            color: #ccc;
-        }
+    .navigator {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+        max-width: 400px;
+        margin-bottom: 10px;
+    }
 
-        .time-slot .time {
-            flex: 1;
-            text-align: left;
-        }
+    .nav-button {
+        background-color: #333;
+        color: #fff;
+        border: none;
+        padding: 10px;
+        cursor: pointer;
+        border-radius: 5px;
+    }
 
-        .time-slot .status {
-            flex: 1;
-            text-align: right;
-        }
+    .time-slot {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px;
+        background-color: #222;
+        margin: 5px 0;
+        border-radius: 5px;
+        text-decoration: none;
+        color: #ccc;
+    }
 
-        .time-slot.unavailable,
-        .time-slot.reserved,
-        .time-slot.pending {
-            background-color: #444;
-            cursor: not-allowed;
-            pointer-events: none;
-        }
+    .time-slot .time {
+        flex: 1;
+        text-align: left;
+    }
 
-        .time-slot.reserved {
-            background-color: #555;
-        }
+    .time-slot .status {
+        flex: 1;
+        text-align: right;
+    }
 
-        .time-slot.pending {
-            background-color: #666;
-        }
+    .time-slot.unavailable,
+    .time-slot.reserved,
+    .time-slot.pending {
+        background-color: #444;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
 
-        .time-slot:hover {
-            background-color: #777;
-        }
-    </style>
-</head>
-<body>
-    <!-- Back Button -->
-    <a href="/home" class="back-icon" title="Back to Home">
-        &#8592; Back
-    </a>
+    .time-slot.reserved {
+        background-color: #555;
+    }
 
-    <div class="header">Studio Scheduler</div>
+    .time-slot.pending {
+        background-color: #666;
+    }
 
-    <!-- Navigator -->
-    <div class="navigator">
-        {% if can_go_previous %}
-            <a href="?date={{ previous_date }}">
-                <button class="nav-button">Previous</button>
-            </a>
-        {% else %}
-            <button class="nav-button" style="opacity: 0.5; cursor: not-allowed;">Previous</button>
-        {% endif %}
+    .time-slot:hover {
+        background-color: #777;
+    }
+</style>
+{% endblock %}
 
-        <div>{{ selected_date|date:"l, F j" }}</div>
+{% block content %}
+<!-- Back Button -->
+<a href="/home" class="back-icon" title="Back to Home">
+    &#8592; Back
+</a>
 
-        <a href="?date={{ next_date }}">
-            <button class="nav-button">Next</button>
+<div class="header">Studio Scheduler</div>
+
+<!-- Navigator -->
+<div class="navigator">
+    {% if can_go_previous %}
+        <a href="?date={{ previous_date }}">
+            <button class="nav-button">Previous</button>
         </a>
-    </div>
+    {% else %}
+        <button class="nav-button" style="opacity: 0.5; cursor: not-allowed;">Previous</button>
+    {% endif %}
 
-    <!-- Time Slots -->
-    <div>
-        {% for time_slot in time_slots %}
-            {% if time_slot.status == "unavailable" %}
-                <div class="time-slot unavailable">
-                    <span class="time">{{ time_slot.hour }}:00</span>
-                    <span class="status">Unavailable</span>
-                </div>
-            {% elif time_slot.status == "reserved" %}
-                <div class="time-slot reserved">
-                    <span class="time">{{ time_slot.hour }}:00</span>
-                    <span class="status">{{ time_slot.booked_by }}</span>
-                </div>
-            {% elif time_slot.status == "pending" %}
-                <div class="time-slot pending">
-                    <span class="time">{{ time_slot.hour }}:00</span>
-                    <span class="status">Pending</span>
-                </div>
-            {% else %}
-                <a href="/reservation/?date={{ selected_date|date:"Y-m-d" }}&time={{ time_slot.hour }}:00" class="time-slot">
-                    <span class="time">{{ time_slot.hour }}:00</span>
-                    <span class="status">Available</span>
-                </a>
-            {% endif %}
-        {% endfor %}
-    </div>
+    <div>{{ selected_date|date:"l, F j" }}</div>
 
+    <a href="?date={{ next_date }}">
+        <button class="nav-button">Next</button>
+    </a>
+</div>
 
-</body>
-</html>
+<!-- Time Slots -->
+<div>
+    {% for time_slot in time_slots %}
+        {% if time_slot.status == "unavailable" %}
+            <div class="time-slot unavailable">
+                <span class="time">{{ time_slot.hour }}:00</span>
+                <span class="status">Unavailable</span>
+            </div>
+        {% elif time_slot.status == "reserved" %}
+            <div class="time-slot reserved">
+                <span class="time">{{ time_slot.hour }}:00</span>
+                <span class="status">{{ time_slot.booked_by }}</span>
+            </div>
+        {% elif time_slot.status == "pending" %}
+            <div class="time-slot pending">
+                <span class="time">{{ time_slot.hour }}:00</span>
+                <span class="status">Pending</span>
+            </div>
+        {% else %}
+            <a href="/reservation/?date={{ selected_date|date:"Y-m-d" }}&time={{ time_slot.hour }}:00" class="time-slot">
+                <span class="time">{{ time_slot.hour }}:00</span>
+                <span class="status">Available</span>
+            </a>
+        {% endif %}
+    {% endfor %}
+</div>
+{% endblock %}

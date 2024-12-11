@@ -1,91 +1,90 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #000;
-            color: #ccc;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            flex-direction: column;
-            position: relative;
-        }
+{% extends "base.html" %}
 
-        .logout-icon {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            font-size: 16px;
-            color: #ccc;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-        }
+{% block title %}Home{% endblock %}
 
-        .logout-icon:hover {
-            color: #fff;
-        }
+{% block extra_styles %}
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        flex-direction: column;
+        position: relative;
+    }
 
-        .header {
-            font-size: 28px;
-            margin-bottom: 30px;
-            text-align: center;
-        }
+    .logout-icon {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 16px;
+        color: #ccc;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
 
-        .button-container {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            width: 90%;
-            max-width: 400px;
-        }
+    .logout-icon:hover {
+        color: #fff;
+    }
 
-        .home-button {
-            flex: 1;
-            padding: 15px;
-            text-align: center;
-            font-size: 16px;
-            color: #fff;
-            background-color: #444;
-            border: none;
-            cursor: pointer;
-            border-radius: 8px;
-            text-decoration: none;
-        }
+    .header {
+        font-size: 28px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
 
-        .home-button:hover {
-            background-color: #333;
-        }
-    </style>
-</head>
-<body>
+    .button-container {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        width: 90%;
+        max-width: 400px;
+    }
+
+    .home-button {
+        flex: 1;
+        padding: 15px;
+        text-align: center;
+        font-size: 16px;
+        color: #fff;
+        background-color: #444;
+        border: none;
+        cursor: pointer;
+        border-radius: 8px;
+        text-decoration: none;
+    }
+
+    .home-button:hover {
+        background-color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% if user.is_authenticated %}
+    <!-- Logout Icon -->
+    <a href="{% url 'member_logout' %}" class="logout-icon">
+        Logout &#8594;
+    </a>
+{% endif %}
+
+<!-- Header -->
+<div class="header">Welcome to the Studio</div>
+
+<!-- Buttons -->
+<div class="button-container">
+    <a href="/week-scheduler/" class="home-button">Schedule Session</a>
     {% if user.is_authenticated %}
-        <!-- Logout Icon -->
-        <a href="{% url 'member_logout' %}" class="logout-icon">
-            Logout &#8594;
-        </a>
+        <a href="/operator-dashboard/" class="home-button">Operator Dashboard</a>
+    {% else %}
+        <a href="/member-login/" class="home-button">Member Login</a>
     {% endif %}
-
-    <!-- Header -->
-    <div class="header">Welcome to the Studio</div>
-
-    <!-- Buttons -->
-    <div class="button-container">
-        <a href="/week-scheduler/" class="home-button">Schedule Session</a>
-        {% if user.is_authenticated %}
-            <a href="/operator-dashboard/" class="home-button">Operator Dashboard</a>
-        {% else %}
-            <a href="/member-login/" class="home-button">Member Login</a>
-        {% endif %}
-    </div>
-</body>
-</html>
+</div>
+{% endblock %}
