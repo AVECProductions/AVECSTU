@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio Scheduler</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #ccc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+        }
+
+        .header {
+            font-size: 24px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .back-icon {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: #ccc;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+
+        .back-icon:hover {
+            color: #fff;
+        }
+
+        .navigator {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 10px;
+        }
+
+        .nav-button {
+            background-color: #333;
+            color: #fff;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .time-slot {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            background-color: #222;
+            margin: 5px 0;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            color: #ccc;
+        }
+
+        .time-slot:hover {
+            background-color: #444;
+        }
+
+        .time-slot.reserved {
+            background-color: #444;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Back Button -->
+    <a href="/home" class="back-icon" title="Back to Home">
+        &#8592; Back
+    </a>
+
+    <div class="header">Studio Scheduler</div>
+
+    <!-- Navigator -->
+    <div class="navigator">
+        <a href="?date={{ previous_date }}">
+            <button class="nav-button">Previous</button>
+        </a>
+        <div>{{ selected_date|date:"l, F j" }}</div>
+        <a href="?date={{ next_date }}">
+            <button class="nav-button">Next</button>
+        </a>
+    </div>
+
+    <!-- Time Slots -->
+    <div>
+        {% for hour in time_slots %}
+        <a href="/reservation/?date={{ selected_date|date:"Y-m-d" }}&time={{ hour }}:00"
+           class="time-slot {% if hour|time:"H:i:s" in reserved_times %}reserved{% endif %}">
+            <span>{{ hour }}:00</span>
+            <span>{% if hour|time:"H:i:s" in reserved_times %}Reserved{% else %}Available{% endif %}</span>
+        </a>
+        {% endfor %}
+    </div>
+</body>
+</html>
