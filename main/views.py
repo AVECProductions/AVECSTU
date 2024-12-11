@@ -11,9 +11,14 @@ from django.utils.html import format_html
 from django.core.mail import EmailMessage
 from django.utils.html import escape
 from django.urls import reverse
+import os
 
 # Predefined password for login
 PREDEFINED_PASSWORD = "avec"
+
+#get base Url for redirection
+BASE_URL = settings.DOMAIN
+
 
 def login_view(request):
     error = None
@@ -245,8 +250,8 @@ def send_payment_email(active_request):
     """
     amount = active_request.hours * 50  # Example: $50 per hour
     description = f"Studio Reservation for {active_request.name} on {active_request.requested_date} at {active_request.requested_time}"
-    return_url = f"http://127.0.0.1:8000/payment-return/"  # Replace with your actual domain
-    cancel_url = f"http://127.0.0.1:8000/payment-cancelled/"  # Replace with your actual domain
+    return_url = f"{BASE_URL}/payment-return/"
+    cancel_url = f"{BASE_URL}/payment-cancelled/"
 
     # Use ActiveRequest ID as the unique invoice number
     invoice_number = active_request.id
