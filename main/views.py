@@ -95,31 +95,70 @@ def reservation_form_view(request):
 
 
 def week_scheduler_view(request):
+    today = datetime.today()
+    today_str = today.strftime('%Y-%m-%d')
+
     # Get the selected date from query parameters, default to today
-    selected_date_str = request.GET.get('date', datetime.today().strftime('%Y-%m-%d'))
+    selected_date_str = request.GET.get('date', today_str)
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d')
 
-    # Fetch reservations for the selected day
+    # If the selected date is before today, force it to today
+    if selected_date.date() < today.date():
+        return redirect(f"?date={today_str}")
+
+    # Fetch all reservations (approved and pending) for the selected day
     reservations = ActiveRequest.objects.filter(
-        requested_date=selected_date.date(), status="approved"
-    ).values_list('requested_time', flat=True)
+        requested_date=selected_date.date()
+    )
 
-    # Prepare reserved times for template
-    reserved_times = [str(res_time) for res_time in reservations]
+    # Build dictionaries for reserved and pending slots
+    reserved_hours = {}
+    pending_hours = {}
+    for res in reservations:
+        start_hour = res.requested_time.hour
+        for h in range(start_hour, start_hour + res.hours):
+            if res.status == "approved":
+                reserved_hours[h] = res.name
+            elif res.status == "pending":
+                pending_hours[h] = "Pending"
 
-    # Previous and next day for navigation
+    # Determine start hour for current date
+    start_hour = today.hour if selected_date.date() == today.date() else 8  # 8 AM default for other dates
+
+    # Prepare time slot data
+    time_slots = []
+    for hour in range(start_hour, 24):  # From start_hour to 11 PM
+        time_slot_status = "available"
+        booked_by = None
+
+        # Check if this timeslot is reserved or pending
+        if hour in reserved_hours:
+            time_slot_status = "reserved"
+            booked_by = reserved_hours[hour]
+        elif hour in pending_hours:
+            time_slot_status = "pending"
+            booked_by = pending_hours[hour]
+
+        time_slots.append({
+            "hour": hour,
+            "status": time_slot_status,
+            "booked_by": booked_by
+        })
+
+    # Navigation controls (previous/next date)
     previous_date = (selected_date - timedelta(days=1)).strftime('%Y-%m-%d')
     next_date = (selected_date + timedelta(days=1)).strftime('%Y-%m-%d')
+    can_go_previous = selected_date.date() > today.date()
 
     context = {
         'selected_date': selected_date,
-        'time_slots': range(8, 24),  # 8 AM to 11 PM
-        'reserved_times': reserved_times,
+        'time_slots': time_slots,
         'previous_date': previous_date,
         'next_date': next_date,
+        'can_go_previous': can_go_previous,
+        'is_member': request.user.is_authenticated,  # Check if logged in
     }
     return render(request, 'mobile/week_scheduler.html', context)
-
 
 
 def operator_dashboard_view(request):
