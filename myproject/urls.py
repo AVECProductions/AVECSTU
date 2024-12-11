@@ -11,4 +11,6 @@ urlpatterns = [
     path('operator-dashboard/', operator_dashboard_view, name='operator_dashboard'),
     path('member-login/', member_login_view, name='member_login'),
     path('member-logout/', member_logout_view, name='member_logout'),
+    path('payment-return/', paypal_return_view, name='payment_return'),
+    path('payment-cancelled/', payment_cancelled_view, name='payment_cancelled'),
 ]
