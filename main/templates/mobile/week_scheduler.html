@@ -92,6 +92,13 @@
         background-color: #666;
     }
 
+    .time-slot.requested {
+    background-color: #666;
+    cursor: not-allowed;
+    pointer-events: none;
+    }
+
+
     .time-slot:hover {
         background-color: #777;
     }
@@ -103,6 +110,17 @@
 <a href="/home" class="back-icon" title="Back to Home">
     &#8592; Back
 </a>
+
+<!-- Messages -->
+{% if messages %}
+    <div class="messages" style="width:100%; max-width:400px; margin-bottom:10px;">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}" style="padding:10px; background-color:#333; color:#fff; border-radius:5px; margin-bottom:5px;">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
 
 <div class="header">Studio Scheduler</div>
 
@@ -132,16 +150,25 @@
                 <span class="status">Unavailable</span>
             </div>
         {% elif time_slot.status == "reserved" %}
+            <!-- Paid -->
             <div class="time-slot reserved">
                 <span class="time">{{ time_slot.hour }}:00</span>
                 <span class="status">{{ time_slot.booked_by }}</span>
             </div>
         {% elif time_slot.status == "pending" %}
+            <!-- Approved but not paid -->
             <div class="time-slot pending">
                 <span class="time">{{ time_slot.hour }}:00</span>
-                <span class="status">Pending</span>
+                <span class="status">{{ time_slot.booked_by }}</span>
+            </div>
+        {% elif time_slot.status == "requested" %}
+            <!-- Requested but not approved -->
+            <div class="time-slot requested">
+                <span class="time">{{ time_slot.hour }}:00</span>
+                <span class="status">{{ time_slot.booked_by }}</span>
             </div>
         {% else %}
+            <!-- Available -->
             <a href="/reservation/?date={{ selected_date|date:"Y-m-d" }}&time={{ time_slot.hour }}:00" class="time-slot">
                 <span class="time">{{ time_slot.hour }}:00</span>
                 <span class="status">Available</span>
@@ -149,4 +176,5 @@
         {% endif %}
     {% endfor %}
 </div>
+
 {% endblock %}

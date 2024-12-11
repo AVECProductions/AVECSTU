@@ -154,3 +154,8 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'apikey'  # This is a fixed value for SendGrid
 EMAIL_HOST_PASSWORD = SENDGRID_API_KEY  # Use the API key as the password
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')  # Replace with your preferred sender email
+
+#Paypal Info
+PAYPAL_CLIENT_ID = config("PAYPAL_CLIENT_ID")
+PAYPAL_CLIENT_SECRET = config("PAYPAL_CLIENT_SECRET")
+PAYPAL_MODE = config("PAYPAL_MODE", default="sandbox")  # Change to 'live' in production

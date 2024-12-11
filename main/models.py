@@ -4,6 +4,7 @@ class ActiveRequest(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('approved', 'Approved'),
+        ('paid', 'Paid'),
         ('declined', 'Declined'),
     ]
 
@@ -20,6 +21,7 @@ class ActiveRequest(models.Model):
 
     def __str__(self):
         return f"Request by {self.name} on {self.requested_date} at {self.requested_time}"
+
 
 
 class Operator(models.Model):
