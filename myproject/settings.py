@@ -27,6 +27,7 @@ SECRET_KEY = 'django-insecure-s5o!_s#20+t2jja)!y$#qch6m$td)xdrtsendm=td6xc#&lhuv
 DEBUG = True
 
 ALLOWED_HOSTS = [
+    'web-production-92e31.up.railway.app',
     '127.0.0.1',  # Localhost
     '192.168.1.151',  # Your laptop's local IP
 ]
