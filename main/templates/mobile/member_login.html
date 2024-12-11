@@ -1,120 +1,119 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Member Login</title>
-    <style>
+{% extends "base.html" %}
+
+{% block title %}Member Login{% endblock %}
+
+{% block extra_styles %}
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+
+    .back-icon {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        font-size: 18px;
+        color: #ccc;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .back-icon:hover {
+        color: #fff;
+    }
+
+    .login-container {
+        border: 1px solid #111;
+        background-color: #111;
+        padding: 20px;
+        width: 90%;
+        max-width: 400px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+    }
+
+    .login-container h2 {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 5px;
+        text-align: left; /* Ensure left alignment */
+    }
+
+    input[type="text"],
+    input[type="password"] {
+        width: 100%; /* Full width */
+        padding: 10px;
+        font-size: 14px;
+        background-color: #222;
+        border: 1px solid #555;
+        color: #ccc;
+        box-sizing: border-box;
+        border-radius: 4px;
+    }
+
+    button {
+        display: block;
+        width: 100%; /* Match input field width */
+        padding: 10px;
+        font-size: 16px;
+        color: #fff;
+        background-color: #444;
+        border: none;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+
+    button:hover {
+        background-color: #333;
+    }
+
+    @media (orientation: landscape) {
         body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #000;
-            color: #ccc;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            align-items: flex-start;
+            padding-top: 20px;
         }
+    }
+</style>
+{% endblock %}
 
-        .back-icon {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 18px;
-            color: #ccc;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
+{% block content %}
+<!-- Back Icon -->
+<a href="/home/" class="back-icon">
+    &#8592; Back
+</a>
 
-        .back-icon:hover {
-            color: #fff;
-        }
-
-        .login-container {
-            border: 1px solid #111;
-            background-color: #111;
-            padding: 20px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
-        }
-
-        .login-container h2 {
-            text-align: center;
-            margin-bottom: 20px;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            font-size: 14px;
-            margin-bottom: 5px;
-            text-align: left; /* Ensure left alignment */
-        }
-
-        input[type="text"],
-        input[type="password"] {
-            width: 100%; /* Full width */
-            padding: 10px;
-            font-size: 14px;
-            background-color: #222;
-            border: 1px solid #555;
-            color: #ccc;
-            box-sizing: border-box;
-            border-radius: 4px;
-        }
-
-        button {
-            display: block;
-            width: 100%; /* Match input field width */
-            padding: 10px;
-            font-size: 16px;
-            color: #fff;
-            background-color: #444;
-            border: none;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-
-        button:hover {
-            background-color: #333;
-        }
-
-        @media (orientation: landscape) {
-            body {
-                align-items: flex-start;
-                padding-top: 20px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <!-- Back Icon -->
-    <a href="/home/" class="back-icon">
-        &#8592; Back
-    </a>
-
-    <!-- Login Container -->
-    <div class="login-container">
-        <h2>Member Login</h2>
-        <form method="POST">
-            {% csrf_token %}
-            <div class="form-group">
-                <label for="username">Username:</label>
-                <input type="text" id="username" name="username" placeholder="Enter your username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">Password:</label>
-                <input type="password" id="password" name="password" placeholder="Enter your password" required>
-            </div>
-            <button type="submit">Login</button>
-        </form>
-    </div>
-</body>
-</html>
+<!-- Login Container -->
+<div class="login-container">
+    <h2>Member Login</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" placeholder="Enter your username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" placeholder="Enter your password" required>
+        </div>
+        <button type="submit">Login</button>
+    </form>
+</div>
+{% endblock %}

@@ -32,7 +32,7 @@ ALLOWED_HOSTS = [
     '192.168.1.151',  # Your laptop's local IP
 ]
 
-CSRF_TRUSTED_ORIGINS = ['https://web-production-92e31.up.railway.app']  # Add the full URL with HTTPS
+CSRF_TRUSTED_ORIGINS = ['https://web-production-92e31.up.railway.app', 'http://www.avecstudios.live']  # Add the full URL with HTTPS
 
 
 
@@ -126,6 +126,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, "static"),
+]
+
 
 # Media files (if your project uses user-uploaded files)
 MEDIA_URL = '/media/'
