@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-s5o!_s#20+t2jja)!y$#qch6m$td)xdrtsendm=td6xc#&lhuv
 DEBUG = True
 
 #get domain
-DOMAIN = 'web-production-92e31.up.railway.app'
+DOMAIN = 'https://web-production-92e31.up.railway.app/'
 
 
 ALLOWED_HOSTS = [
