@@ -27,10 +27,13 @@ SECRET_KEY = 'django-insecure-s5o!_s#20+t2jja)!y$#qch6m$td)xdrtsendm=td6xc#&lhuv
 DEBUG = True
 
 ALLOWED_HOSTS = [
-    'web-production-92e31.up.railway.app',
+    'web-production-92e31.up.railway.app', # Add your Railway domain
     '127.0.0.1',  # Localhost
     '192.168.1.151',  # Your laptop's local IP
 ]
+
+CSRF_TRUSTED_ORIGINS = ['https://web-production-92e31.up.railway.app']  # Add the full URL with HTTPS
+
 
 
 # Application definition
