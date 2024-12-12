@@ -35,7 +35,6 @@ ALLOWED_HOSTS = [
     DOMAIN,
     'avecstudios.live',
     'www.avecstudios.live',
-    'https://avecstudios.live/',
     'web-production-92e31.up.railway.app', # Add your Railway domain
     '127.0.0.1',  # Localhost
     '192.168.1.151',  # Your laptop's local IP
@@ -43,8 +42,8 @@ ALLOWED_HOSTS = [
 
 CSRF_TRUSTED_ORIGINS = [
     DOMAIN,
-    'https://www.avecstudios.live/',
-    'https://avecstudios.live/',
+    'https://www.avecstudios.live',
+    'https://avecstudios.live',
     'https://web-production-92e31.up.railway.app',
     'http://www.avecstudios.live']  # Add the full URL with HTTPS
 
