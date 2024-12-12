@@ -25,28 +25,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG')
 
-#get domain
-DOMAIN = r'avecstudios.live'
+# Get Domain
+DOMAIN = config("DOMAIN")
 
+# Get security stuff
+ALLOWED_HOSTS = config("ALLOWED_HOSTS").split(",")
+CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS").split(",")
 
-ALLOWED_HOSTS = [
-    DOMAIN,
-    'avecstudios.live',
-    'www.avecstudios.live',
-    'web-production-92e31.up.railway.app', # Add your Railway domain
-    '127.0.0.1',  # Localhost
-    '192.168.1.151',  # Your laptop's local IP
-]
-
-CSRF_TRUSTED_ORIGINS = [
-    DOMAIN,
-    'https://www.avecstudios.live',
-    'https://avecstudios.live',
-    'https://web-production-92e31.up.railway.app',
-    'http://www.avecstudios.live']  # Add the full URL with HTTPS
-
+# Time Zone
+TIME_ZONE = config('TIME_ZONE', default='UTC')
+USE_TZ = True  # Ensure this is set to True to enable timezone support
 
 # Application definition
 
