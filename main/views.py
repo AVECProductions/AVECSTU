@@ -58,17 +58,15 @@ def guest_login_view(request):
     if request.method == "POST":
         guest_password = request.POST.get("password")
 
-        # Check if the password matches the predefined guest password
-        if guest_password == settings.GUEST_PASSWORD:
-            # Log the user in as "public"
-            user = authenticate(username="public", password=guest_password)
-            if user:
-                login(request, user)
-                return redirect("reservation_form")
-            else:
-                error = "Guest login failed. Please try again."
+        # Log the user in as "public"
+        user = authenticate(username="public", password=guest_password)
+        if user:
+            login(request, user)
+            return redirect("reservation_form")
         else:
-            error = "Invalid guest password. Please try again."
+            error = "Guest login failed. Please try again."
+    else:
+        error = "Invalid guest password. Please try again."
 
     return render(request, "mobile/guest_login.html", {"error": error})
 
