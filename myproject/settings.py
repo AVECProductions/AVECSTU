@@ -41,10 +41,6 @@ BASE_URL = 'http://192.168.1.152:8000/'
 ALLOWED_HOSTS = config("ALLOWED_HOSTS").split(",")
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS").split(",")
 
-# Time Zone
-TIME_ZONE = config('TIME_ZONE')
-USE_TZ = True  # Ensure this is set to True to enable timezone support
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -124,11 +120,10 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
-
 USE_I18N = True
 
 USE_TZ = True
+TIME_ZONE = config('TZ')
 
 
 # Static files (CSS, JavaScript, Images)
