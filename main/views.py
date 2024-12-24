@@ -54,7 +54,7 @@ def guest_login_view(request):
     """
     Allow guests to log in using a shared password.
     """
-    error = None
+    error = None  # Initialize error as None
     if request.method == "POST":
         guest_password = request.POST.get("password")
 
@@ -65,8 +65,6 @@ def guest_login_view(request):
             return redirect("reservation_form")
         else:
             error = "Guest login failed. Please try again."
-    else:
-        error = "Invalid guest password. Please try again."
 
     return render(request, "mobile/guest_login.html", {"error": error})
 
