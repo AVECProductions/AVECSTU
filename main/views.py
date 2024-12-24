@@ -13,7 +13,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import calendar
 from datetime import datetime, date, timedelta
-from django.utils.timezone import now
+from django.utils.timezone import localtime, now, timedelta
 # Configure Stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -116,14 +116,13 @@ def reservation_form_view(request):
     return render(request, "mobile/reservation_form.html")
 
 
-
 def monthly_calendar_view(request):
     """
     Displays a monthly calendar (grid) with a dark theme, allowing
     users to pick a day and jump to the weekly scheduler.
     We limit to 2 months (approx 60 days) into the future.
     """
-    today = date.today()
+    today = localtime(now()).date()  # Current date in the local timezone
     two_months_from_now = today + timedelta(days=60)
 
     # Read year/month from GET params, default to today's year/month
@@ -145,62 +144,49 @@ def monthly_calendar_view(request):
     # Make sure we don't go below today's year/month
     # Or above two_months_from_now's year/month
     # We'll build a date for the 1st of that month, then compare
-    requested_date = date(year, month, 1)
+    requested_date = today.replace(year=year, month=month, day=1)
     if requested_date < today.replace(day=1):
-        # If they are asking for a month in the past, just redirect to the current month
+        # If they are asking for a month in the past, redirect to the current month
         return redirect('monthly_calendar', permanent=False)
     elif requested_date > two_months_from_now.replace(day=1):
         # If they asked for beyond 2 months, redirect to 2 months from now
         return redirect(f'/monthly-calendar/?year={two_months_from_now.year}&month={two_months_from_now.month}')
 
-    # We can use Python's calendar to figure out how the month is laid out
+    # Use Python's calendar to figure out how the month is laid out
     cal = calendar.Calendar(firstweekday=6)
-    # firstweekday=6 means Sunday is the last column if you want Monday as first,
-    # or pick something that suits your region (e.g., 0=Monday, 6=Sunday)
-
-    # Build a list of all days (datetime.date) in this month
     month_days = cal.itermonthdates(year, month)
 
-    # We'll store them in a list so the template can render them in a 7-column grid
+    # Build a list of all days (datetime.date) in this month
     days_to_display = []
     for day in month_days:
-        # 'cal.itermonthdates(year, month)' yields some days from the previous/next month
-        # if needed to fill the grid. We'll keep them but mark them as "in this month" or not.
         in_current_month = (day.month == month)
-
-        # We also want to mark if the day is < today or > 2 months from now
-        # so we can disable clicks, or style them differently.
         is_in_range = (day >= today) and (day <= two_months_from_now)
-
         days_to_display.append({
             'day': day,
             'in_current_month': in_current_month,
-            'is_in_range': is_in_range
+            'is_in_range': is_in_range,
         })
 
-    # Figure out the month name (e.g. "December 2024")
+    # Figure out the month name (e.g., "December 2024")
     month_name = requested_date.strftime("%B %Y")
 
     # Compute previous/next month links
-    # We do simple logic: if current month is December (12), next is January of next year, etc.
-    prev_year = year
-    prev_month = month - 1
+    prev_year, prev_month = year, month - 1
     if prev_month < 1:
         prev_month = 12
         prev_year -= 1
 
-    next_year = year
-    next_month = month + 1
+    next_year, next_month = year, month + 1
     if next_month > 12:
         next_month = 1
         next_year += 1
 
     # Check if previous/next is valid in your 2-month range
-    can_go_previous = date(prev_year, prev_month, 1) >= today.replace(day=1)
-    can_go_next = date(next_year, next_month, 1) <= two_months_from_now.replace(day=1)
+    can_go_previous = today.replace(year=prev_year, month=prev_month, day=1) >= today.replace(day=1)
+    can_go_next = today.replace(year=next_year, month=next_month, day=1) <= two_months_from_now.replace(day=1)
 
     context = {
-        'month_name': month_name,  # e.g. "December 2024"
+        'month_name': month_name,  # e.g., "December 2024"
         'year': year,
         'month': month,
         'days_to_display': days_to_display,
@@ -219,19 +205,18 @@ def daily_scheduler_view(request):
     """
     Only logged-in users can view/book slots on this scheduler.
     """
-    today = datetime.today()
-    today_str = today.strftime('%Y-%m-%d')
+    today = localtime(now()).date()  # Get today's date in the current timezone
 
     # Default to today unless a date is passed in
-    selected_date_str = request.GET.get('date', today_str)
-    selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d')
+    selected_date_str = request.GET.get('date', today.isoformat())  # Get ISO format string for the date
+    selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()  # Convert to datetime.date
 
     # Force date to not be in the past
-    if selected_date.date() < today.date():
-        return redirect(f"?date={today_str}")
+    if selected_date < today:  # Compare `datetime.date` objects
+        return redirect(f"?date={today.isoformat()}")
 
     reservations = ActiveRequest.objects.filter(
-        requested_date=selected_date.date()
+        requested_date=selected_date  # Compare against `datetime.date`
     )
 
     reserved_hours = {}
@@ -248,7 +233,7 @@ def daily_scheduler_view(request):
             elif res.status == "pending":
                 requested_hours[h] = "Requested"
 
-    start_hour = today.hour if selected_date.date() == today.date() else 8
+    start_hour = localtime(now()).hour if selected_date == today else 8
 
     time_slots = []
     for hour in range(start_hour, 24):
@@ -271,9 +256,9 @@ def daily_scheduler_view(request):
             "booked_by": booked_by
         })
 
-    previous_date = (selected_date - timedelta(days=1)).strftime('%Y-%m-%d')
-    next_date = (selected_date + timedelta(days=1)).strftime('%Y-%m-%d')
-    can_go_previous = selected_date.date() > today.date()
+    previous_date = (selected_date - timedelta(days=1)).isoformat()
+    next_date = (selected_date + timedelta(days=1)).isoformat()
+    can_go_previous = selected_date > today
 
     context = {
         'selected_date': selected_date,
@@ -284,6 +269,7 @@ def daily_scheduler_view(request):
         'is_member': request.user.is_authenticated,
     }
     return render(request, 'mobile/daily_scheduler.html', context)
+
 
 
 from django.utils.html import escape
