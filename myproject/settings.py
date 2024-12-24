@@ -13,10 +13,14 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 from decouple import config
+import stripe
+import dj_database_url
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+#guest password
+GUEST_PASSWORD = "avec"
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -29,13 +33,16 @@ DEBUG = config('DEBUG')
 
 # Get Domain
 DOMAIN = config("DOMAIN")
+#BASE_URL = DOMAIN
+#BASE_URL = 'http://127.0.0.1:8000/'
+BASE_URL = 'http://192.168.1.152:8000/'
 
 # Get security stuff
 ALLOWED_HOSTS = config("ALLOWED_HOSTS").split(",")
 CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS").split(",")
 
 # Time Zone
-TIME_ZONE = config('TIME_ZONE', default='UTC')
+TIME_ZONE = config('TIME_ZONE')
 USE_TZ = True  # Ensure this is set to True to enable timezone support
 
 # Application definition
@@ -85,10 +92,11 @@ WSGI_APPLICATION = 'myproject.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.parse(
+        config('DATABASE_URL'),  # Fetch DATABASE_URL from .env
+        conn_max_age=600,        # Optional: Maintain database connections
+        ssl_require=True         # Optional: Use SSL for production
+    )
 }
 
 
@@ -160,3 +168,9 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL')  # Replace with your preferred
 PAYPAL_CLIENT_ID = config("PAYPAL_CLIENT_ID")
 PAYPAL_CLIENT_SECRET = config("PAYPAL_CLIENT_SECRET")
 PAYPAL_MODE = config("PAYPAL_MODE", default="sandbox")  # Change to 'live' in production
+
+#Strip Info
+STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY')
+STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY')
+
+stripe.api_key = STRIPE_SECRET_KEY  # Set the API key for all Stripe calls

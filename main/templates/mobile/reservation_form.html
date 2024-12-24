@@ -4,6 +4,27 @@
 
 {% block extra_styles %}
 <style>
+
+    html, body {
+        /* Make the page take the full window height */
+        margin: 0;
+        padding: 0;
+        height: 100%;
+    }
+
+    body {
+        /* Use a flex layout that centers children both horizontally and vertically */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: #000; /* or your existing background */
+        font-family: Arial, sans-serif;
+        color: #ccc;
+        /* Remove any extra padding if needed */
+        padding: 0;
+        margin: 0;
+    }
+
     body {
         margin: 0;
         font-family: Arial, sans-serif;
@@ -114,7 +135,7 @@
 
 {% block content %}
 <!-- Back Button -->
-<a href="/week-scheduler/" class="back-button" title="Back to Scheduler">&#8592; Back</a>
+<a href="/daily-scheduler/" class="back-button" title="Back to Scheduler">&#8592; Back</a>
 
 <!-- Form Container -->
 <div class="form-container">

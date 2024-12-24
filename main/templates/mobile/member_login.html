@@ -39,6 +39,7 @@
         max-width: 400px;
         box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
         border-radius: 8px;
+        text-align: center; /* Center align everything */
     }
 
     .login-container h2 {
@@ -54,12 +55,12 @@
         display: block;
         font-size: 14px;
         margin-bottom: 5px;
-        text-align: left; /* Ensure left alignment */
+        text-align: left;
     }
 
     input[type="text"],
     input[type="password"] {
-        width: 100%; /* Full width */
+        width: 100%;
         padding: 10px;
         font-size: 14px;
         background-color: #222;
@@ -71,7 +72,7 @@
 
     button {
         display: block;
-        width: 100%; /* Match input field width */
+        width: 100%;
         padding: 10px;
         font-size: 16px;
         color: #fff;
@@ -85,6 +86,19 @@
         background-color: #333;
     }
 
+    .guest-link {
+        margin-top: 15px;
+        font-size: 14px;
+        color: #fff;
+        text-decoration: underline;
+        cursor: pointer;
+        display: inline-block;
+    }
+
+    .guest-link:hover {
+        color: #ccc;
+    }
+
     @media (orientation: landscape) {
         body {
             align-items: flex-start;
@@ -96,7 +110,7 @@
 
 {% block content %}
 <!-- Back Icon -->
-<a href="/home/" class="back-icon">
+<a href="/" class="back-icon">
     &#8592; Back
 </a>
 
@@ -115,5 +129,6 @@
         </div>
         <button type="submit">Login</button>
     </form>
+    <a href="{% url 'guest_login' %}" class="guest-link">Continue as Guest</a>
 </div>
 {% endblock %}

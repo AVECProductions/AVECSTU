@@ -1,161 +1,262 @@
 from django.shortcuts import render, redirect
-from datetime import datetime, timedelta
 from django.core.mail import send_mail
 from django.contrib import messages
 from django.conf import settings
 from .models import ActiveRequest
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from .payments import create_paypal_payment_link, capture_paypal_payment
 from django.utils.html import format_html
 from django.core.mail import EmailMessage
-from django.utils.html import escape
 from django.urls import reverse
-import os
+import stripe
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+import calendar
+from datetime import datetime, date, timedelta
+# Configure Stripe
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
-# Predefined password for login
-PREDEFINED_PASSWORD = "avec"
+BASE_URL = settings.DOMAIN  # e.g., "https://yourdomain.com"
 
-#get base Url for redirection
-BASE_URL = settings.DOMAIN
-
-
-def login_view(request):
-    error = None
-    if request.method == "POST":
-        password = request.POST.get("password")
-        if password == PREDEFINED_PASSWORD:
-            # Redirect to the Home Screen instead of the Scheduler
-            return redirect('home')
-        else:
-            # If incorrect, set an error message
-            error = "Invalid password. Please try again."
-
-    # Render the login page with the error message (if any)
-    return render(request, 'mobile/login.html', {'error': error})
 
 def home_view(request):
-    # Check if the user is authenticated
+    """
+    Public home page (not password protected).
+    We removed the Stripe test button from here.
+    """
     is_logged_in = request.user.is_authenticated
-
-    # Render the home screen with appropriate options
     return render(request, 'mobile/home.html', {'is_logged_in': is_logged_in})
 
+
 def member_login_view(request):
+    """
+    Standard Django authentication (username/password).
+    """
     error = None
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
-
         user = authenticate(request, username=username, password=password)
+
         if user is not None:
             login(request, user)
-            return redirect('home')  # Redirect to Home Screen after login
+            return redirect('home')
         else:
             error = "Invalid credentials. Please try again."
 
     return render(request, 'mobile/member_login.html', {'error': error})
+def guest_login_view(request):
+    """
+    Allow guests to log in using a shared password.
+    """
+    error = None
+    if request.method == "POST":
+        guest_password = request.POST.get("password")
+
+        # Check if the password matches the predefined guest password
+        if guest_password == settings.GUEST_PASSWORD:
+            # Log the user in as "public"
+            user = authenticate(username="public", password=guest_password)
+            if user:
+                login(request, user)
+                return redirect("reservation_form")
+            else:
+                error = "Guest login failed. Please try again."
+        else:
+            error = "Invalid guest password. Please try again."
+
+    return render(request, "mobile/guest_login.html", {"error": error})
 
 @login_required
 def member_logout_view(request):
     logout(request)
-    return redirect('home')  # Redirect to Home Screen after logout
+    return redirect('home')
 
+@login_required
 def reservation_form_view(request):
-    # Get date and time from query parameters
-    date_str = request.GET.get('date', '')
-    time_str = request.GET.get('time', '')
+    """
+    Handle session booking for members and reservation requests for guests.
+    """
+    user = request.user
 
-    # Parse the date and time strings into a datetime object
-    try:
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-        formatted_date = date_obj.strftime('%b %d, %Y')  # Format: Dec 5, 2024
-    except ValueError:
-        formatted_date = date_str  # Fallback if date parsing fails
+    # Redirect members to the booking page directly
 
-    formatted_date_time = f"{formatted_date} at {time_str}"
-
+    # Guests can submit reservation requests
     if request.method == "POST":
-        # Collect form data
         name = request.POST.get("name")
         email = request.POST.get("email")
         phone = request.POST.get("phone")
+        date = request.GET.get("date")
+        time = request.GET.get("time")
         hours = request.POST.get("hours")
         notes = request.POST.get("notes")
 
-        # Save the request to the database
+        print(f"Date received from form: {date}")
+
+        # Save the reservation request
         ActiveRequest.objects.create(
             name=name,
             email=email,
             phone=phone,
-            requested_date=date_str,
-            requested_time=time_str,
+            requested_date=date,
+            requested_time=time,
             hours=hours,
             notes=notes,
+            status="pending",
         )
 
-        # Add success message
-        messages.success(request, "Request Submitted Successfully.")
+        messages.success(request, "Your reservation request has been submitted.")
+        return redirect("home")
 
-        # Redirect back to the scheduler page
-        return redirect('week_scheduler')
-
-    # Pass date and time to the template
-    return render(request, 'mobile/reservation_form.html', {'formatted_date_time': formatted_date_time})
+    return render(request, "mobile/reservation_form.html")
 
 
-def week_scheduler_view(request):
+
+def monthly_calendar_view(request):
+    """
+    Displays a monthly calendar (grid) with a dark theme, allowing
+    users to pick a day and jump to the weekly scheduler.
+    We limit to 2 months (approx 60 days) into the future.
+    """
+    today = date.today()
+    two_months_from_now = today + timedelta(days=60)
+
+    # Read year/month from GET params, default to today's year/month
+    year = request.GET.get("year")
+    month = request.GET.get("month")
+
+    if year and month:
+        try:
+            year = int(year)
+            month = int(month)
+        except ValueError:
+            # If invalid, reset to current month
+            year = today.year
+            month = today.month
+    else:
+        year = today.year
+        month = today.month
+
+    # Make sure we don't go below today's year/month
+    # Or above two_months_from_now's year/month
+    # We'll build a date for the 1st of that month, then compare
+    requested_date = date(year, month, 1)
+    if requested_date < today.replace(day=1):
+        # If they are asking for a month in the past, just redirect to the current month
+        return redirect('monthly_calendar', permanent=False)
+    elif requested_date > two_months_from_now.replace(day=1):
+        # If they asked for beyond 2 months, redirect to 2 months from now
+        return redirect(f'/monthly-calendar/?year={two_months_from_now.year}&month={two_months_from_now.month}')
+
+    # We can use Python's calendar to figure out how the month is laid out
+    cal = calendar.Calendar(firstweekday=6)
+    # firstweekday=6 means Sunday is the last column if you want Monday as first,
+    # or pick something that suits your region (e.g., 0=Monday, 6=Sunday)
+
+    # Build a list of all days (datetime.date) in this month
+    month_days = cal.itermonthdates(year, month)
+
+    # We'll store them in a list so the template can render them in a 7-column grid
+    days_to_display = []
+    for day in month_days:
+        # 'cal.itermonthdates(year, month)' yields some days from the previous/next month
+        # if needed to fill the grid. We'll keep them but mark them as "in this month" or not.
+        in_current_month = (day.month == month)
+
+        # We also want to mark if the day is < today or > 2 months from now
+        # so we can disable clicks, or style them differently.
+        is_in_range = (day >= today) and (day <= two_months_from_now)
+
+        days_to_display.append({
+            'day': day,
+            'in_current_month': in_current_month,
+            'is_in_range': is_in_range
+        })
+
+    # Figure out the month name (e.g. "December 2024")
+    month_name = requested_date.strftime("%B %Y")
+
+    # Compute previous/next month links
+    # We do simple logic: if current month is December (12), next is January of next year, etc.
+    prev_year = year
+    prev_month = month - 1
+    if prev_month < 1:
+        prev_month = 12
+        prev_year -= 1
+
+    next_year = year
+    next_month = month + 1
+    if next_month > 12:
+        next_month = 1
+        next_year += 1
+
+    # Check if previous/next is valid in your 2-month range
+    can_go_previous = date(prev_year, prev_month, 1) >= today.replace(day=1)
+    can_go_next = date(next_year, next_month, 1) <= two_months_from_now.replace(day=1)
+
+    context = {
+        'month_name': month_name,  # e.g. "December 2024"
+        'year': year,
+        'month': month,
+        'days_to_display': days_to_display,
+        'prev_year': prev_year,
+        'prev_month': prev_month,
+        'next_year': next_year,
+        'next_month': next_month,
+        'can_go_previous': can_go_previous,
+        'can_go_next': can_go_next,
+        'today': today,
+    }
+    return render(request, 'mobile/monthly_calendar.html', context)
+
+
+def daily_scheduler_view(request):
+    """
+    Only logged-in users can view/book slots on this scheduler.
+    """
     today = datetime.today()
     today_str = today.strftime('%Y-%m-%d')
 
-    # Get the selected date from query parameters, default to today
+    # Default to today unless a date is passed in
     selected_date_str = request.GET.get('date', today_str)
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d')
 
-    # If the selected date is before today, force it to today
+    # Force date to not be in the past
     if selected_date.date() < today.date():
         return redirect(f"?date={today_str}")
 
-    # Fetch all reservations (approved and pending) for the selected day
     reservations = ActiveRequest.objects.filter(
         requested_date=selected_date.date()
     )
 
-    # Build dictionaries for reserved and pending slots
     reserved_hours = {}
     pending_hours = {}
     requested_hours = {}
+
     for res in reservations:
         start_hour = res.requested_time.hour
         for h in range(start_hour, start_hour + res.hours):
             if res.status == "paid":
                 reserved_hours[h] = res.name
             elif res.status == "approved":
-                # Instead of treating this as fully reserved, we could label it as "payment pending"
-                pending_hours[h] = "Payment Pending"
+                pending_hours[h] = "Pending"
             elif res.status == "pending":
                 requested_hours[h] = "Requested"
 
-    # Determine start hour for current date
-    start_hour = today.hour if selected_date.date() == today.date() else 8  # 8 AM default for other dates
+    start_hour = today.hour if selected_date.date() == today.date() else 8
 
-    # Prepare time slot data
     time_slots = []
-    for hour in range(start_hour, 24):  # From start_hour to 11 PM
+    for hour in range(start_hour, 24):
         time_slot_status = "available"
         booked_by = None
 
         if hour in reserved_hours:
-            # paid
             time_slot_status = "reserved"
             booked_by = reserved_hours[hour]
         elif hour in pending_hours:
-            # approved but not paid
             time_slot_status = "pending"
             booked_by = pending_hours[hour]
         elif hour in requested_hours:
-            # requested but not approved
-            # Create a new status called "requested" to differentiate it from others.
             time_slot_status = "requested"
             booked_by = requested_hours[hour]
 
@@ -165,7 +266,6 @@ def week_scheduler_view(request):
             "booked_by": booked_by
         })
 
-    # Navigation controls (previous/next date)
     previous_date = (selected_date - timedelta(days=1)).strftime('%Y-%m-%d')
     next_date = (selected_date + timedelta(days=1)).strftime('%Y-%m-%d')
     can_go_previous = selected_date.date() > today.date()
@@ -176,113 +276,104 @@ def week_scheduler_view(request):
         'previous_date': previous_date,
         'next_date': next_date,
         'can_go_previous': can_go_previous,
-        'is_member': request.user.is_authenticated,  # Check if logged in
+        'is_member': request.user.is_authenticated,
     }
-    return render(request, 'mobile/week_scheduler.html', context)
+    return render(request, 'mobile/daily_scheduler.html', context)
 
 
+from django.utils.html import escape
+
+@login_required
 def operator_dashboard_view(request):
-    # Fetch all pending requests, sorted by newest created
+    """
+    View for the operator/admin to review pending requests and approve or reject them.
+    """
     pending_requests = ActiveRequest.objects.filter(status='pending').order_by('-created_at')
 
     if request.method == "POST":
-        # Handle accept/reject actions
         request_id = request.POST.get('request_id')
         action = request.POST.get('action')
+        suggested_times = request.POST.get('suggested_times', "").strip()  # Get suggested times
 
         if request_id and action:
             try:
                 active_request = ActiveRequest.objects.get(id=request_id)
                 client_email = active_request.email
 
-                # Update status
                 if action == "accept":
                     active_request.status = "approved"
                     active_request.save()
-
-                    # # Send email notification
-                    # send_mail(
-                    #     subject="Your Reservation Request Has Been Approved",
-                    #     message=(
-                    #         f"Hello {active_request.name},\n\n"
-                    #         f"Your reservation request for {active_request.requested_date} at {active_request.requested_time} "
-                    #         f"has been approved. We look forward to seeing you!\n\n"
-                    #         f"Thank you,\nAVEC Studios"
-                    #     ),
-                    #     from_email=settings.DEFAULT_FROM_EMAIL,
-                    #     recipient_list=[client_email],
-                    # )
-                    # messages.success(request, "Request approved and client notified.")
-                    reservation = active_request
-                    send_payment_email(reservation)
+                    send_payment_email_stripe(active_request)
+                    messages.success(request, "Request approved. Payment email sent.")
                 elif action == "reject":
                     active_request.status = "declined"
                     active_request.save()
-
-                    # Send email notification
-                    send_mail(
-                        subject="Your Reservation Request Has Been Declined",
-                        message=(
-                            f"Hello {active_request.name},\n\n"
-                            f"Unfortunately, your reservation request for {active_request.requested_date} at {active_request.requested_time} "
-                            f"has been declined. Please feel free to reach out to us for further assistance.\n\n"
-                            f"Thank you,\nAVEC Studios"
-                        ),
-                        from_email=settings.DEFAULT_FROM_EMAIL,
-                        recipient_list=[client_email],
-                    )
+                    send_rejection_email(active_request, suggested_times)
                     messages.success(request, "Request rejected and client notified.")
             except ActiveRequest.DoesNotExist:
                 messages.error(request, "The request could not be found.")
             except Exception as e:
-                print(f"Error sending email: {e}")
+                print(f"Error processing the request: {e}")
                 messages.error(request, "Error processing the request. Please try again.")
 
-        # Redirect to avoid form resubmission
         return redirect('operator_dashboard')
 
     context = {'pending_requests': pending_requests}
     return render(request, 'mobile/operator_dashboard.html', context)
 
-def send_payment_email(active_request):
-    """
-    Send a payment link to the user via email with improved formatting.
-    """
-    amount = active_request.hours * 50  # Example: $50 per hour
-    description = f"Studio Reservation for {active_request.name} on {active_request.requested_date} at {active_request.requested_time}"
-    return_url = f"{BASE_URL}/payment-return/"
-    cancel_url = f"{BASE_URL}/payment-cancelled/"
 
-    # Use ActiveRequest ID as the unique invoice number
-    invoice_number = active_request.id
 
+def send_payment_email_stripe(active_request):
+    """
+    Generate a Stripe Payment Link and email it to the client.
+    """
     try:
-        payment_link = create_paypal_payment_link(amount, description, return_url, cancel_url, invoice_number)
+        # Price calculation example: $50 per hour
+        amount = active_request.hours * 50.0
+        # Stripe amounts are in cents
+        unit_amount = int(amount * 100)
+
+        # Create a Price dynamically (this will create a new ephemeral product for each request)
+        price = stripe.Price.create(
+            unit_amount=unit_amount,
+            currency="usd",
+            product_data={"name": "Studio Booking Fee"},
+
+        )
+
+        # Create the Payment Link
+        payment_link = stripe.PaymentLink.create(
+            line_items=[{"price": price.id, "quantity": 1}],
+            payment_method_types=["card"],  # Allow card payments (includes Apple Pay)
+            after_completion={
+                "type": "redirect",
+                "redirect": {"url": f"{settings.BASE_URL}/payment-success/"}
+            },
+        )
 
         email_content = f"""
-            <div style="font-family: Arial, sans-serif; font-size:16px; color:#333333; line-height:1.5; margin: 0 auto; max-width:600px; padding:20px;">
-                <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">Complete Your Studio Reservation</h2>
-                <p>Hi {active_request.name},</p>
-                <p>Thank you for reserving the studio! Below are your reservation details:</p>
-                <ul style="list-style-type:none; padding:0;">
-                    <li><strong>Date:</strong> {active_request.requested_date.strftime("%b %d, %Y")}</li>
-                    <li><strong>Time:</strong> {active_request.requested_time.strftime("%I:%M %p")}</li>
-                    <li><strong>Hours:</strong> {active_request.hours} hour(s)</li>
-                    <li><strong>Amount Due:</strong> ${amount:.2f}</li>
-                </ul>
-                <p style="margin-top:20px;">To confirm your reservation, please complete the payment by clicking the button below:</p>
-                <div style="text-align:center; margin: 30px 0;">
-                    <a href="{payment_link}"
-                       style="background-color: #000000; color: #ffffff; text-decoration: none; padding: 15px 25px; border-radius: 5px; font-size:18px; font-weight:bold; display:inline-block;">
-                        Complete Payment
-                    </a>
-                </div>
-                <p>If you have any questions, feel free to reply to this email.</p>
-                <p>Thank you,<br>AVEC Studios</p>
+        <div style="font-family: Arial, sans-serif; font-size:16px; color:#333333; line-height:1.5; margin: 0 auto; max-width:600px; padding:20px;">
+            <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">Complete Your Studio Reservation</h2>
+            <p>Hi {active_request.name},</p>
+            <p>Thank you for reserving the studio! Below are your reservation details:</p>
+            <ul style="list-style-type:none; padding:0;">
+                <li><strong>Date:</strong> {active_request.requested_date.strftime("%b %d, %Y")}</li>
+                <li><strong>Time:</strong> {active_request.requested_time.strftime("%I:%M %p")}</li>
+                <li><strong>Hours:</strong> {active_request.hours} hour(s)</li>
+                <li><strong>Amount Due:</strong> ${amount:.2f}</li>
+            </ul>
+            <p style="margin-top:20px;">To confirm your reservation, please complete the payment by clicking the button below:</p>
+            <div style="text-align:center; margin: 30px 0;">
+                <a href="{payment_link.url}"
+                   style="background-color: #000000; color: #ffffff; text-decoration: none; padding: 15px 25px; border-radius: 5px; font-size:18px; font-weight:bold; display:inline-block;">
+                    Complete Payment
+                </a>
             </div>
+            <p>If you have any questions, feel free to reply to this email.</p>
+            <p>Thank you,<br>AVEC Studios</p>
+        </div>
         """
 
-        # Send email
         email = EmailMessage(
             subject="Complete Your Payment for Studio Reservation",
             body=email_content,
@@ -291,52 +382,68 @@ def send_payment_email(active_request):
         )
         email.content_subtype = "html"
         email.send()
+
     except Exception as e:
-        print(f"Failed to create payment link: {e}")
-        raise Exception("Failed to send payment email")
+        print(f"Failed to send Stripe payment email: {e}")
+        raise
 
-
-
-def paypal_return_view(request):
-    payment_id = request.GET.get("paymentId")
-    payer_id = request.GET.get("PayerID")
-
-    if not payment_id or not payer_id:
-        messages.error(request, "Payment was cancelled or failed.")
-        return redirect("home")
-
+def send_rejection_email(active_request, suggested_times):
+    """
+    Send a rejection email with optional alternative times and a link to the daily scheduler.
+    """
     try:
-        payment = capture_paypal_payment(payment_id, payer_id)
+        daily_scheduler_link = f"{settings.BASE_URL}/daily-scheduler/?date={active_request.requested_date.strftime('%Y-%m-%d')}"
+        suggested_times_message = ""
 
-        # Extract the invoice number from the payment
-        invoice_number = payment.transactions[0].invoice_number
+        # Add suggested times if provided
+        if suggested_times:
+            suggested_times_list = escape(suggested_times).replace("\n", "<br>")  # Escape and format
+            suggested_times_message = f"""
+                <p>The operator has suggested the following alternative times:</p>
+                <ul>
+                    <li>{suggested_times_list}</li>
+                </ul>
+            """
 
-        # Fetch the ActiveRequest using the invoice number
-        active_request = ActiveRequest.objects.get(id=invoice_number)
+        email_content = f"""
+        <div style="font-family: Arial, sans-serif; font-size:16px; color:#333333; line-height:1.5; margin: 0 auto; max-width:600px; padding:20px;">
+            <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">Reservation Request Declined</h2>
+            <p>Hi {active_request.name},</p>
+            <p>Unfortunately, your reservation request for:</p>
+            <ul style="list-style-type:none; padding:0;">
+                <li><strong>Date:</strong> {active_request.requested_date.strftime("%b %d, %Y")}</li>
+                <li><strong>Time:</strong> {active_request.requested_time.strftime("%I:%M %p")}</li>
+            </ul>
+            <p>has been declined.</p>
+            {suggested_times_message}
+            <p>You can view and book other available slots by visiting the link below:</p>
+            <div style="text-align:center; margin: 30px 0;">
+                <a href="{daily_scheduler_link}"
+                   style="background-color: #000000; color: #ffffff; text-decoration: none; padding: 15px 25px; border-radius: 5px; font-size:18px; font-weight:bold; display:inline-block;">
+                    View Available Times
+                </a>
+            </div>
+            <p>If you have any questions, feel free to reply to this email.</p>
+            <p>Thank you,<br>AVEC Studios</p>
+        </div>
+        """
 
-        # Update the status to "paid"
-        active_request.status = "paid"
-        active_request.save()
-
-        # Add a success message
-        messages.success(request, "Your payment was successful and your booking is now confirmed!")
-
-        # Redirect to the scheduler, passing the requested date as a query parameter
-        date_str = active_request.requested_date.strftime('%Y-%m-%d')
-        time_str = active_request.requested_time.strftime('%H:%M')
-        return redirect(f"{reverse('week_scheduler')}?date={date_str}&time={time_str}")
+        email = EmailMessage(
+            subject="Your Reservation Request Has Been Declined",
+            body=email_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[active_request.email],
+        )
+        email.content_subtype = "html"
+        email.send()
 
     except Exception as e:
-        print(f"Error capturing payment: {e}")
-        messages.error(request, "Payment failed.")
-        return redirect("home")
+        print(f"Failed to send rejection email: {e}")
+        raise
 
 
-def payment_cancelled_view(request):
+def payment_success(request):
     """
-    Handle the case when a user cancels payment.
+    Simple success page after Stripe completes payment and redirects user back.
     """
-    messages.error(request, "Payment was cancelled.")
-    return redirect("home")
-
-
+    return render(request, "payment_success.html", {"message": "Thank you! Your payment was successful."})

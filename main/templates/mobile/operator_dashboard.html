@@ -16,13 +16,12 @@
         position: absolute;
         top: 10px;
         left: 10px;
-        font-size: 24px;
+        font-size: 18px;
         color: #ccc;
         text-decoration: none;
         display: flex;
         align-items: center;
         gap: 5px;
-        cursor: pointer;
     }
 
     .back-icon:hover {
@@ -134,15 +133,46 @@
         background-color: #555;
         color: #fff;
     }
+
+    /* Messages styling */
+    .messages {
+        width: 100%;
+        max-width: 800px;
+        margin: 0 auto 15px; /* Center align and add spacing below */
+        text-align: center;
+    }
+
+    .messages .alert {
+        padding: 10px;
+        background-color: #333; /* Dark background */
+        color: #fff; /* White text */
+        border-radius: 5px;
+        margin-bottom: 5px; /* Space between multiple messages */
+        display: inline-block;
+        box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+    }
+
 </style>
 {% endblock %}
 
 {% block content %}
 <!-- Back Button -->
-<a href="/home" class="back-icon" title="Back to Home">
+<a href="/" class="back-icon" title="Back to Home">
     &#8592; Back
 </a>
 
+<!-- Messages (placed just above the header) -->
+{% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+{% endif %}
+
+<!-- Header -->
 <div class="header">Operator Dashboard</div>
 
 <!-- Conditional Display for No Requests -->
@@ -197,4 +227,5 @@
     }
 </script>
 {% endblock %}
+
 
