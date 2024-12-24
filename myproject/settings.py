@@ -19,9 +19,6 @@ import dj_database_url
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-#guest password
-GUEST_PASSWORD = "avec"
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
@@ -33,9 +30,7 @@ DEBUG = config('DEBUG')
 
 # Get Domain
 DOMAIN = config("DOMAIN")
-#BASE_URL = DOMAIN
-#BASE_URL = 'http://127.0.0.1:8000/'
-BASE_URL = 'http://192.168.1.152:8000/'
+BASE_URL = DOMAIN
 
 # Get security stuff
 ALLOWED_HOSTS = config("ALLOWED_HOSTS").split(",")
