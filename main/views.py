@@ -13,6 +13,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import calendar
 from datetime import datetime, date, timedelta
+from django.utils.timezone import now
 # Configure Stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -24,8 +25,12 @@ def home_view(request):
     Public home page (not password protected).
     We removed the Stripe test button from here.
     """
+    context = {
+        'is_logged_in': request.user.is_authenticated,
+        'current_time': now(),
+    }
     is_logged_in = request.user.is_authenticated
-    return render(request, 'mobile/home.html', {'is_logged_in': is_logged_in})
+    return render(request, 'mobile/home.html', context)
 
 
 def member_login_view(request):
