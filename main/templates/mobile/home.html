@@ -4,17 +4,20 @@
 
 {% block extra_styles %}
 <style>
-    body {
+    html, body {
         margin: 0;
+        padding: 0;
+        height: 100%;
         font-family: Arial, sans-serif;
         background-color: #000;
         color: #ccc;
         display: flex;
         justify-content: center;
         align-items: center;
-        height: 100vh;
-        flex-direction: column;
-        position: relative;
+    }
+
+    .container {
+        text-align: center;
     }
 
     .logout-icon {
@@ -36,7 +39,7 @@
 
     .header {
         font-size: 28px;
-        margin-bottom: 30px;
+        margin-bottom: 20px;
         text-align: center;
     }
 
@@ -50,13 +53,13 @@
         display: flex;
         justify-content: center;
         gap: 20px;
-        width: 90%;
-        max-width: 400px;
+        margin-top: 20px;
     }
 
     .home-button {
         flex: 1;
-        padding: 15px;
+        max-width: 150px;
+        padding: 20px 15px; /* Thicker buttons */
         text-align: center;
         font-size: 16px;
         color: #fff;
@@ -65,6 +68,7 @@
         cursor: pointer;
         border-radius: 8px;
         text-decoration: none;
+        white-space: nowrap;
     }
 
     .home-button:hover {
@@ -74,28 +78,30 @@
 {% endblock %}
 
 {% block content %}
-{% if user.is_authenticated %}
-    <!-- Logout Icon -->
-    <a href="{% url 'member_logout' %}" class="logout-icon">
-        Logout &#8594;
-    </a>
-{% endif %}
-
-<!-- Header -->
-<div class="header">Welcome to the Studio</div>
-
-<!-- Time Label -->
-<div class="time-label">
-    Current Time: {{ current_time }}
-</div>
-
-<!-- Buttons -->
-<div class="button-container">
-    <a href="/monthly-calendar/" class="home-button">Schedule Session</a>
+<div class="container">
     {% if user.is_authenticated %}
-        <a href="/operator-dashboard/" class="home-button">Operator Dashboard</a>
-    {% else %}
-        <a href="accounts/login/" class="home-button">Member Login</a>
+        <!-- Logout Icon -->
+        <a href="{% url 'member_logout' %}" class="logout-icon">
+            Logout &#8594;
+        </a>
     {% endif %}
+
+    <!-- Header -->
+    <div class="header">Welcome to the Studio</div>
+
+    <!-- Time Label -->
+    <div class="time-label">
+        Current Time: {{ current_time }}
+    </div>
+
+    <!-- Buttons -->
+    <div class="button-container">
+        <a href="/monthly-calendar/" class="home-button">Schedule Session</a>
+        {% if user.is_authenticated %}
+            <a href="/operator-dashboard/" class="home-button">Operator Dashboard</a>
+        {% else %}
+            <a href="accounts/login/" class="home-button">Member Login</a>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

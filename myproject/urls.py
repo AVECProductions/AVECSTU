@@ -12,5 +12,6 @@ urlpatterns = [
     path('accounts/login/', member_login_view, name='member_login'),
     path('guest-login/', guest_login_view, name='guest_login'),
     path('member-logout/', member_logout_view, name='member_logout'),
-    path('payment-success/', payment_success, name='payment_success')
+    path('payment-success/', payment_success, name='payment_success'),
+    path('stripe-webhook/', stripe_webhook, name='stripe_webhook')
 ]

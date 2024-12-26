@@ -162,5 +162,6 @@ PAYPAL_MODE = config("PAYPAL_MODE", default="sandbox")  # Change to 'live' in pr
 #Strip Info
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY')
 STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY')
+STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET')
 
 stripe.api_key = STRIPE_SECRET_KEY  # Set the API key for all Stripe calls

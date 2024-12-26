@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.core.mail import send_mail
+from django.contrib.auth.models import User
 from django.contrib import messages
 from django.conf import settings
 from .models import ActiveRequest
@@ -14,6 +15,8 @@ from django.views.decorators.csrf import csrf_exempt
 import calendar
 from datetime import datetime, date, timedelta
 from django.utils.timezone import localtime, now, timedelta
+from django.utils.html import escape
+
 # Configure Stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -73,14 +76,13 @@ def member_logout_view(request):
     logout(request)
     return redirect('home')
 
+
 @login_required
 def reservation_form_view(request):
     """
     Handle session booking for members and reservation requests for guests.
     """
     user = request.user
-
-    # Redirect members to the booking page directly
 
     # Guests can submit reservation requests
     if request.method == "POST":
@@ -95,7 +97,7 @@ def reservation_form_view(request):
         print(f"Date received from form: {date}")
 
         # Save the reservation request
-        ActiveRequest.objects.create(
+        new_request = ActiveRequest.objects.create(
             name=name,
             email=email,
             phone=phone,
@@ -105,6 +107,45 @@ def reservation_form_view(request):
             notes=notes,
             status="pending",
         )
+
+        # Notify all operators via email
+        operators = User.objects.filter(groups__name="Operator")  # Assuming you have a group named "Operator"
+        operator_emails = [operator.email for operator in operators if operator.email]
+
+        if operator_emails:
+            email_content = f"""
+            <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.5; max-width: 600px; margin: auto;">
+                <h2 style="color: #000;">New Reservation Request</h2>
+                <p>A new reservation request has been submitted with the following details:</p>
+                <ul style="padding-left: 20px; color: #555;">
+                    <li><strong>Name:</strong> {name}</li>
+                    <li><strong>Email:</strong> {email}</li>
+                    <li><strong>Phone:</strong> {phone}</li>
+                    <li><strong>Date:</strong> {date}</li>
+                    <li><strong>Time:</strong> {time}</li>
+                    <li><strong>Duration:</strong> {hours} hour(s)</li>
+                    <li><strong>Notes:</strong> {notes or 'No additional notes'}</li>
+                </ul>
+                <p>Click the button below to review this request in the Operator Dashboard:</p>
+                <div style="text-align: center; margin: 20px 0;">
+                    <a href="{settings.BASE_URL}/operator-dashboard/"
+                       style="background-color: #007bff; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 5px; font-size: 16px;">
+                        View Operator Dashboard
+                    </a>
+                </div>
+                <p style="color: #777;">Thank you,</p>
+                <p style="color: #777;"><strong>AVEC Studios</strong></p>
+            </div>
+            """
+
+            email = EmailMessage(
+                subject="New Reservation Request Submitted",
+                body=email_content,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=operator_emails,
+            )
+            email.content_subtype = "html"  # Set the email content to HTML
+            email.send()
 
         messages.success(request, "Your reservation request has been submitted.")
         return redirect("home")
@@ -267,9 +308,6 @@ def daily_scheduler_view(request):
     return render(request, 'mobile/daily_scheduler.html', context)
 
 
-
-from django.utils.html import escape
-
 @login_required
 def operator_dashboard_view(request):
     """
@@ -309,7 +347,6 @@ def operator_dashboard_view(request):
     return render(request, 'mobile/operator_dashboard.html', context)
 
 
-
 def send_payment_email_stripe(active_request):
     """
     Generate a Stripe Payment Link and email it to the client.
@@ -335,6 +372,9 @@ def send_payment_email_stripe(active_request):
             after_completion={
                 "type": "redirect",
                 "redirect": {"url": f"{settings.BASE_URL}/payment-success/"}
+            },
+            metadata={
+                "reservation_id": active_request.id  # Embed the unique reservation ID
             },
         )
 
@@ -431,6 +471,77 @@ def send_rejection_email(active_request, suggested_times):
 
 def payment_success(request):
     """
-    Simple success page after Stripe completes payment and redirects user back.
+    Redirects to the home page with a success message after payment completion.
     """
-    return render(request, "payment_success.html", {"message": "Thank you! Your payment was successful."})
+    messages.success(request, "Your payment has been successfully completed!")
+    return redirect("home")
+
+@csrf_exempt
+def stripe_webhook(request):
+    print("recieved")
+    payload = request.body
+    sig_header = request.META['HTTP_STRIPE_SIGNATURE']
+    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, endpoint_secret
+        )
+    except ValueError as e:
+        # Invalid payload
+        return JsonResponse({'error': 'Invalid payload'}, status=400)
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        return JsonResponse({'error': 'Invalid signature'}, status=400)
+
+    # Handle the event
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        # Update the reservation status to "paid"
+        handle_successful_payment(session)
+
+    return JsonResponse({'status': 'success'})
+
+def handle_successful_payment(session):
+    try:
+        # Retrieve the reservation ID from the session metadata
+        reservation_id = session['metadata']['reservation_id']
+        reservation = ActiveRequest.objects.get(id=reservation_id)
+        reservation.status = "paid"
+        reservation.save()
+
+        # Notify admin or send a confirmation email
+        send_payment_confirmation_email(reservation)
+
+    except KeyError:
+        print("Metadata missing in the session.")
+    except ActiveRequest.DoesNotExist:
+        print(f"Reservation with ID {reservation_id} not found.")
+
+def send_payment_confirmation_email(reservation):
+    try:
+        email_content = f"""
+        <div>
+            <h2>Payment Successful</h2>
+            <p>Reservation Details:</p>
+            <ul>
+                <li>Name: {reservation.name}</li>
+                <li>Date: {reservation.requested_date}</li>
+                <li>Time: {reservation.requested_time}</li>
+                <li>Hours: {reservation.hours}</li>
+            </ul>
+            <p>Thank you for your payment!</p>
+        </div>
+        """
+        email = EmailMessage(
+            subject="Payment Confirmation",
+            body=email_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[reservation.email],
+        )
+        email.content_subtype = "html"
+        email.send()
+
+    except Exception as e:
+        print(f"Failed to send payment confirmation email: {e}")
+
