@@ -353,7 +353,8 @@ def send_payment_email_stripe(active_request):
     """
     try:
         # Price calculation example: $50 per hour
-        amount = active_request.hours * 50.0
+        #amount = active_request.hours * 50.0
+        amount = 1
         # Stripe amounts are in cents
         unit_amount = int(amount * 100)
 
