@@ -479,7 +479,7 @@ def payment_success(request):
 
 @csrf_exempt
 def stripe_webhook(request):
-    print("recieved")
+    print("webhook recieved")
     payload = request.body
     sig_header = request.META['HTTP_STRIPE_SIGNATURE']
     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
