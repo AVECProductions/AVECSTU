@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Send Invite{% endblock %}
+
+{% block extra_styles %}
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+
+    .back-icon {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        font-size: 18px;
+        color: #ccc;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .back-icon:hover {
+        color: #fff;
+    }
+
+    .form-container {
+        border: 1px solid #111;
+        background-color: #111;
+        padding: 20px;
+        width: 90%;
+        max-width: 400px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .form-container h2 {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 5px;
+        text-align: left;
+    }
+
+    input[type="email"],
+    select {
+        width: 100%;
+        padding: 10px;
+        font-size: 14px;
+        background-color: #222;
+        border: 1px solid #555;
+        color: #ccc;
+        box-sizing: border-box;
+        border-radius: 4px;
+    }
+
+    button {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        font-size: 16px;
+        color: #fff;
+        background-color: #444;
+        border: none;
+        cursor: pointer;
+        border-radius: 4px;
+    }
+
+    button:hover {
+        background-color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Back Icon -->
+<a href="/" class="back-icon">
+    &#8592; Back
+</a>
+
+<!-- Invite Form -->
+<div class="form-container">
+    <h2>Send Invite</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="email">Email Address:</label>
+            <input type="email" id="email" name="email" placeholder="Enter the recipient's email" required>
+        </div>
+        <div class="form-group">
+            <label for="role">Role:</label>
+            <select id="role" name="role" required>
+                <option value="member">Member</option>
+                <option value="operator">Operator</option>
+            </select>
+        </div>
+        <button type="submit">Send Invite</button>
+    </form>
+</div>
+{% endblock %}

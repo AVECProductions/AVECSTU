@@ -1,4 +1,4 @@
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404
 from django.core.mail import send_mail
 from django.contrib.auth.models import User
 from django.contrib import messages
@@ -6,21 +6,33 @@ from django.conf import settings
 from .models import ActiveRequest
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.utils.html import format_html
 from django.core.mail import EmailMessage
-from django.urls import reverse
 import stripe
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import calendar
-from datetime import datetime, date, timedelta
+from datetime import datetime
 from django.utils.timezone import localtime, now, timedelta
 from django.utils.html import escape
+from django.utils.crypto import get_random_string
+from .models import Invite
+from django.http import HttpResponseForbidden
+
 
 # Configure Stripe
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 BASE_URL = settings.DOMAIN  # e.g., "https://yourdomain.com"
+
+#Require role for certain navigations
+def role_required(role):
+    def decorator(view_func):
+        def _wrapped_view(request, *args, **kwargs):
+            if request.user.is_authenticated and request.user.profile.role == role:
+                return view_func(request, *args, **kwargs)
+            return HttpResponseForbidden("You do not have permission to access this page.")
+        return _wrapped_view
+    return decorator
 
 
 def home_view(request):
@@ -545,4 +557,91 @@ def send_payment_confirmation_email(reservation):
 
     except Exception as e:
         print(f"Failed to send payment confirmation email: {e}")
+
+def create_invite_view(request):
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        role = request.POST.get('role')
+
+        # Check if an invite already exists
+        existing_invite = Invite.objects.filter(email=email).first()
+        if existing_invite:
+            # If the invite already exists and has expired, update it
+            if existing_invite.expires_at < now():
+                existing_invite.token = get_random_string(length=64)
+                existing_invite.role = role
+                existing_invite.expires_at = now() + timedelta(days=7)
+                existing_invite.is_used = False
+                existing_invite.save()
+                messages.success(request, f"Invite for {email} has been updated and resent.")
+            else:
+                messages.error(request, f"An active invite already exists for {email}.")
+            return redirect('create_invite')
+
+        # Generate a unique token for a new invite
+        token = get_random_string(length=64)
+        invite = Invite.objects.create(email=email, role=role, token=token)
+
+        # Generate the registration link
+        registration_link = f"{settings.BASE_URL}/register/{invite.token}/"
+
+        # Send the email
+        email_subject = "You’re Invited to Join AVEC Studios"
+        email_body = f"""
+        <div style="font-family: Arial, sans-serif; font-size:16px; color:#333333; line-height:1.5; margin: 0 auto; max-width:600px; padding:20px;">
+            <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">You’re Invited to Join AVEC Studios</h2>
+            <p>Hi,</p>
+            <p>You've been invited to join AVEC Studios as a {role}. Click the button below to complete your registration:</p>
+            <div style="text-align:center; margin: 30px 0;">
+                <a href="{registration_link}"
+                   style="background-color: #000000; color: #ffffff; text-decoration: none; padding: 15px 25px; border-radius: 5px; font-size:18px; font-weight:bold; display:inline-block;">
+                    Register Now
+                </a>
+            </div>
+            <p>This link will expire on {invite.expires_at.strftime('%Y-%m-%d %H:%M:%S')}.</p>
+            <p>If you didn’t expect this email, you can ignore it.</p>
+            <p>Regards,<br>AVEC Studios Team</p>
+        </div>
+        """
+        send_mail(
+            subject=email_subject,
+            message="You've been invited to join AVEC Studios. Use the provided link to register.",
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            html_message=email_body,
+        )
+
+        messages.success(request, f"Invite sent to {email}!")
+        return redirect('create_invite')
+
+    return render(request, 'admin/create_invite.html')
+
+
+
+
+def register_view(request, token):
+    invite = get_object_or_404(Invite, token=token)
+
+    if not invite.is_valid():
+        return render(request, "error.html", {"message": "Invalid or expired invite link."})
+
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+
+        # Create user and assign role
+        user = User.objects.create_user(username=username, email=invite.email, password=password)
+        user.profile.role = invite.role
+        user.save()
+
+        # Mark invite as used
+        invite.is_used = True
+        invite.save()
+
+        # Log the user in and redirect
+        login(request, user)
+        return redirect("home")
+
+    return render(request, "mobile/register.html", {"invite": invite})
+
 

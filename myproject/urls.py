@@ -1,9 +1,10 @@
 from django.contrib import admin
 from django.urls import path
 from main.views import *
+from decouple import config
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path(config('ADMIN_URL'), admin.site.urls),
     path('', home_view, name='home'),
     path('monthly-calendar/', monthly_calendar_view, name='monthly_calendar'),
     path('daily-scheduler/', daily_scheduler_view, name='daily_scheduler'),
@@ -13,7 +14,7 @@ urlpatterns = [
     path('guest-login/', guest_login_view, name='guest_login'),
     path('member-logout/', member_logout_view, name='member_logout'),
     path('payment-success/', payment_success, name='payment_success'),
-    path('stripe-webhook/', stripe_webhook, name='stripe_webhook')
+    path(config('WEBHOOK_URL'), stripe_webhook, name='stripe_webhook'),
+    path('create-invite/', create_invite_view, name='create_invite'),
+    path('register/<str:token>/', register_view, name='register'),
 ]
-
-x = 5
