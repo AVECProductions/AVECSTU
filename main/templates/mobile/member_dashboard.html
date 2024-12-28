@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Member Dashboard{% endblock %}
+
+{% block content %}
+<div style="max-width: 600px; margin: auto; padding: 20px; background-color: #222; border-radius: 8px; color: #ccc;">
+    <h2 style="text-align: center;">Member Dashboard</h2>
+    <form method="POST">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" style="background-color: #444; color: #fff; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+            Update Profile
+        </button>
+    </form>
+</div>
+{% endblock %}

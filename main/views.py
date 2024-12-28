@@ -17,6 +17,7 @@ from django.utils.html import escape
 from django.utils.crypto import get_random_string
 from .models import Invite
 from django.http import HttpResponseForbidden
+from .forms import ProfileUpdateForm
 
 
 # Configure Stripe
@@ -33,6 +34,25 @@ def role_required(role):
             return HttpResponseForbidden("You do not have permission to access this page.")
         return _wrapped_view
     return decorator
+
+@login_required
+def member_dashboard_view(request):
+    """
+    Display the member's profile information and allow edits.
+    """
+    if request.method == "POST":
+        form = ProfileUpdateForm(request.POST, instance=request.user.profile)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Your profile has been updated.")
+            return redirect('member_dashboard')
+    else:
+        form = ProfileUpdateForm(instance=request.user.profile)
+
+    context = {
+        'form': form
+    }
+    return render(request, 'mobile/member_dashboard.html', context)
 
 
 def home_view(request):

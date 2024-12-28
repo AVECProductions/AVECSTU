@@ -7,11 +7,84 @@
     <title>{% block title %}Title{% endblock %}</title>
     <link rel="icon" type="image/png" href="{% static 'favicon.png' %}">
     {% block extra_styles %}{% endblock %}
+    <style>
+        /* General Header Styles */
+        header {
+            position: fixed; /* Stick the header to the top of the page */
+            top: 0;
+            left: 0;
+            width: 100%; /* Full width of the page */
+            background-color: #000; /* Matches your background */
+            color: #ccc;
+            padding: 10px 20px; /* Adds spacing for content */
+            display: flex;
+            justify-content: space-between; /* Space between left and right sections */
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(255, 255, 255, 0.1);
+            z-index: 1000; /* Ensures it stays above other content */
+            box-sizing: border-box; /* Ensures padding is included in width */
+        }
+
+        header a {
+            color: #ccc;
+            text-decoration: none;
+            margin-left: 10px;
+        }
+
+        header a:hover {
+            color: #fff;
+        }
+
+        /* Right-side login/logout container */
+        .header-right {
+            min-width: 200px; /* Minimum width to accommodate content */
+            max-width: 300px; /* Optional: Cap the maximum width */
+            display: flex;
+            justify-content: flex-end; /* Right-align the content */
+            align-items: center;
+            gap: 10px; /* Space between username and logout/login links */
+            white-space: nowrap; /* Prevents text wrapping */
+        }
+
+        .header-right a {
+            text-align: right; /* Align text inside the links to the right */
+            overflow: hidden; /* Ensures that overflowing text is clipped */
+            text-overflow: ellipsis; /* Adds ellipsis for long text */
+        }
+
+        body {
+            margin: 0; /* Removes default margin */
+            padding-top: 60px; /* Prevents content from overlapping with the fixed header */
+            font-family: Arial, sans-serif;
+            background-color: #000;
+            color: #ccc;
+            overflow-y: auto; /* Ensures the scrollbar does not overlap content */
+        }
+
+        main {
+            padding: 20px;
+        }
+    </style>
 </head>
 <body>
-    {% block content %}
-    <!-- Default content or placeholder if needed -->
-    {% endblock %}
+    <header>
+        <div>
+            <a href="{% url 'home' %}">Home</a>
+        </div>
+        <div class="header-right">
+            {% if user.is_authenticated %}
+                <a href="{% url 'member_dashboard' %}">{{ user.username }}</a>
+                <a href="{% url 'member_logout' %}">Logout</a>
+            {% else %}
+                <a href="{% url 'member_login' %}">Login</a>
+            {% endif %}
+        </div>
+    </header>
+
+    <main>
+        {% block content %}
+        <!-- Default content or placeholder if needed -->
+        {% endblock %}
+    </main>
 </body>
 </html>
-
