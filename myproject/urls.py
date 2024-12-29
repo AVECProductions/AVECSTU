@@ -19,4 +19,5 @@ urlpatterns = [
     path('create-invite/', create_invite_view, name='create_invite'),
     path('register/<str:token>/', register_view, name='register'),
     path('member-dashboard/', member_dashboard_view, name='member_dashboard'),
+    path("admin-dashboard/", admin_dashboard, name="admin_dashboard"),
 ]

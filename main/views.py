@@ -18,6 +18,7 @@ from django.utils.crypto import get_random_string
 from .models import Invite
 from django.http import HttpResponseForbidden
 from .forms import ProfileUpdateForm
+import requests
 
 
 # Configure Stripe
@@ -663,5 +664,66 @@ def register_view(request, token):
         return redirect("home")
 
     return render(request, "mobile/register.html", {"invite": invite})
+
+
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.shortcuts import render, redirect
+from django.urls import reverse
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)  # Restrict to admin users
+def admin_dashboard(request):
+    # Kasa Flask API base URL
+    API_URL = "https://kontrolz.app"
+
+    # Define outlets and their names
+    outlets = [
+        {"name": "mixer", "display_name": "Mixer"},
+        {"name": "decks", "display_name": "Decks"},
+        {"name": "speakers", "display_name": "Speakers"},
+    ]
+
+    # Fetch the current state of each outlet (only on page load)
+    if request.method == "GET":
+        for outlet in outlets:
+            try:
+                response = requests.get(f"{API_URL}/status/{outlet['name']}")
+                outlet["state"] = "on" if response.json().get("state") == "on" else "off"
+            except Exception as e:
+                outlet["state"] = "off"  # Default to "off" if the API call fails
+
+    # Handle POST request to toggle outlet state
+    if request.method == "POST":
+        outlet_name = request.POST.get("outlet")
+        message = "No action performed."
+        for outlet in outlets:
+            if outlet["name"] == outlet_name:
+                try:
+                    # Determine the action based on the current state
+                    current_state = outlet.get("state", "off")
+                    action = "off" if current_state == "on" else "on"
+
+                    # Send command to the Flask API
+                    response = requests.post(f"{API_URL}/toggle", json={"device": outlet_name, "action": action})
+                    response_data = response.json()
+                    message = response_data.get("message", "Action completed")
+
+                    # Parse the response message to extract the state
+                    if "turned ON" in message:
+                        outlet["state"] = "on"
+                    elif "turned OFF" in message:
+                        outlet["state"] = "off"
+                except Exception as e:
+                    message = f"Error: {str(e)}"
+                break
+
+        return render(request, "admin/dashboard.html", {"outlets": outlets, "message": message})
+
+    return render(request, "admin/dashboard.html", {"outlets": outlets, "create_invite_url": reverse("create_invite")})
+
+
+
+
 
 

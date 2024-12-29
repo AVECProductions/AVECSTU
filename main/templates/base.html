@@ -73,7 +73,13 @@
         </div>
         <div class="header-right">
             {% if user.is_authenticated %}
-                <a href="{% url 'member_dashboard' %}">{{ user.username }}</a>
+                {% if user.is_staff %}
+                    <!-- Admin users are redirected to the Admin Dashboard -->
+                    <a href="{% url 'admin_dashboard' %}">{{ user.username }}</a>
+                {% else %}
+                    <!-- Regular members are redirected to the Member Dashboard -->
+                    <a href="{% url 'member_dashboard' %}">{{ user.username }}</a>
+                {% endif %}
                 <a href="{% url 'member_logout' %}">Logout</a>
             {% else %}
                 <a href="{% url 'member_login' %}">Login</a>

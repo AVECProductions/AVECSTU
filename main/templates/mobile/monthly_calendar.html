@@ -5,23 +5,24 @@
 {% block extra_styles %}
 <style>
     html, body {
-        /* Make the page take the full window height */
         margin: 0;
         padding: 0;
-        height: calc(100% - 40px); /* Adjust 60px to match the actual header height */
-    }
-
-    body {
-        /* Use a flex layout that centers children both horizontally and vertically */
+        height: calc(100% - 40px); /* Adjust 40px for the header height */
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #ccc;
         display: flex;
         justify-content: center;
+        align-items: flex-start; /* Start alignment, use margin-top for spacing */
+    }
+
+    .calendar-page-container {
+        width: 100%;
+        max-width: 800px;
+        min-width: 500px;
+        display: flex;
+        flex-direction: column;
         align-items: center;
-        background-color: #000; /* or your existing background */
-        font-family: Arial, sans-serif;
-        color: #ccc;
-        /* Remove any extra padding if needed */
-        padding: 0;
-        margin: 0;
     }
 
     .back-icon {
@@ -35,21 +36,11 @@
         align-items: center;
         gap: 5px;
     }
+
     .back-icon:hover {
         color: #fff;
     }
 
-    /* Outer container to center everything */
-    .calendar-page-container {
-        width: 100%;
-        max-width: 800px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        margin-bottom: 5%; /* Adjust this value to your liking */
-    }
-
-    /* Navigation bar: Prev on left, Next on right, Month/Year in center */
     .calendar-navigation {
         width: 100%;
         display: flex;
@@ -62,51 +53,55 @@
         font-size: 28px;
         font-weight: bold;
         text-align: center;
+        color: #fff;
     }
 
     .nav-button {
         background-color: #333;
         color: #fff;
         border: none;
-        padding: 10px;
+        padding: 10px 20px;
         cursor: pointer;
         border-radius: 5px;
+        transition: background-color 0.2s ease;
     }
+
+    .nav-button:hover {
+        background-color: #444;
+    }
+
     .nav-button:disabled {
         opacity: 0.4;
         cursor: not-allowed;
     }
 
-    /* Calendar container with faint outline */
     .calendar-container {
         border: 1px solid #111;
         background-color: #111;
         padding: 20px;
         width: 100%;
-        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
         border-radius: 8px;
     }
 
-    /* Day headers (Sun, Mon, Tue, ...) */
     .day-headers {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         gap: 10px;
         margin-bottom: 10px;
     }
+
     .day-headers div {
         text-align: center;
         font-weight: bold;
     }
 
-    /* Main grid for days */
     .month-grid {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
         gap: 10px;
     }
 
-    /* Each day cell */
     .day-cell {
         position: relative;
         background-color: #222;
@@ -114,35 +109,33 @@
         height: 80px;
         color: #ccc;
         font-size: 16px;
-        /* Center text horizontally & vertically */
         display: flex;
         justify-content: center;
         align-items: center;
-
         cursor: pointer;
         transition: background-color 0.2s ease;
         text-align: center;
     }
+
     .day-cell:hover {
         background-color: #444;
     }
-    /* Out-of-range or unavailable days */
+
     .day-cell.inactive {
         background-color: #333;
         opacity: 0.4;
         cursor: not-allowed;
     }
 
-    /* Highlight the current day */
     .day-cell.current-day {
-        background-color: #27ae60; /* Green color */
-        color: #fff; /* Optional: white text for contrast */
-    }
-    .day-cell.current-day:hover {
-        background-color: #1dcc67; /* Slightly darker green on hover */
+        background-color: #27ae60; /* Green for the current day */
+        color: #fff;
     }
 
-    /* Link that fills the cell, removing underline and centering text */
+    .day-cell.current-day:hover {
+        background-color: #1dcc67;
+    }
+
     .day-link {
         display: flex;
         justify-content: center;
@@ -150,26 +143,24 @@
         width: 100%;
         height: 100%;
         color: inherit;
-        text-decoration: none; /* Remove underline */
+        text-decoration: none;
     }
+
     .day-link:hover {
         text-decoration: none;
         color: #fff;
     }
-
 </style>
 {% endblock %}
 
 {% block content %}
-
 <!-- Back Button -->
 <a href="/" class="back-icon" title="Back to Home">
     &#8592; Back
 </a>
 
 <div class="calendar-page-container">
-
-    <!-- Messages (placed above the calendar navigation) -->
+    <!-- Messages -->
     {% if messages %}
         <div class="messages">
             {% for message in messages %}
@@ -180,7 +171,7 @@
         </div>
     {% endif %}
 
-    <!-- Navigation (Prev | Month Year | Next) -->
+    <!-- Navigation -->
     <div class="calendar-navigation">
         {% if can_go_previous %}
             <a href="?year={{ prev_year }}&month={{ prev_month }}">
@@ -203,9 +194,8 @@
         {% endif %}
     </div>
 
-    <!-- Calendar with day headers and day cells -->
+    <!-- Calendar Grid -->
     <div class="calendar-container">
-        <!-- Day-of-week header row -->
         <div class="day-headers">
             <div>Sun</div>
             <div>Mon</div>
@@ -218,28 +208,19 @@
 
         <div class="month-grid">
             {% for item in days_to_display %}
-                {% comment %}
-                'item.is_in_range' => True if in [today, two-months-from-now]
-                'item.day' => A specific date (datetime object) in the current grid
-                {% endcomment %}
                 {% if item.is_in_range %}
-                    <!-- Highlight the current day -->
                     <div class="day-cell {% if item.day|date:'Y-m-d' == today|date:'Y-m-d' %}current-day{% endif %}">
                         <a class="day-link" href="{% url 'daily_scheduler' %}?date={{ item.day|date:'Y-m-d' }}">
                             {{ item.day|date:'d' }}
                         </a>
                     </div>
                 {% else %}
-                    <!-- Inactive cell -->
                     <div class="day-cell inactive">
                         {{ item.day|date:'d' }}
                     </div>
                 {% endif %}
             {% endfor %}
         </div>
-
     </div>
 </div>
-
-
 {% endblock %}
