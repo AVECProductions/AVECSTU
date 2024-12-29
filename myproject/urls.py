@@ -20,4 +20,6 @@ urlpatterns = [
     path('register/<str:token>/', register_view, name='register'),
     path('member-dashboard/', member_dashboard_view, name='member_dashboard'),
     path("admin-dashboard/", admin_dashboard, name="admin_dashboard"),
+    path("pay-membership/", pay_membership, name="pay_membership"),
+    path("cancel-membership/", cancel_membership, name="cancel_membership"),
 ]

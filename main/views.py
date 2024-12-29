@@ -19,6 +19,7 @@ from .models import Invite
 from django.http import HttpResponseForbidden
 from .forms import ProfileUpdateForm
 import requests
+from .models import UserMembership
 
 
 # Configure Stripe
@@ -36,24 +37,72 @@ def role_required(role):
         return _wrapped_view
     return decorator
 
+
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.utils.timezone import now
+from .models import UserMembership
+
+
 @login_required
 def member_dashboard_view(request):
     """
     Display the member's profile information and allow edits.
     """
+
+    # Restrict access for "public" users
+    if request.user.profile.role == "public":
+        return HttpResponseForbidden("You are not authorized to access this page.")
+
     if request.method == "POST":
-        form = ProfileUpdateForm(request.POST, instance=request.user.profile)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Your profile has been updated.")
-            return redirect('member_dashboard')
-    else:
-        form = ProfileUpdateForm(instance=request.user.profile)
+        # Update user profile directly
+        user_profile = request.user.profile
+        user_profile.first_name = request.POST.get("first_name", user_profile.user.first_name)
+        user_profile.last_name = request.POST.get("last_name", user_profile.user.last_name)
+        user_profile.email = request.POST.get("email", user_profile.user.email)
+        user_profile.phone = request.POST.get("phone", user_profile.user.email)
+        user_profile.save()
+
+        # Update user's first and last name
+        user = request.user
+        user.first_name = request.POST.get("first_name", user.first_name)
+        user.last_name = request.POST.get("last_name", user.last_name)
+        user.email = request.POST.get("email", user.email)
+        user.save()
+
+        messages.success(request, "Your profile has been updated.")
+        return redirect('member_dashboard')
+
+    # Retrieve membership status
+    try:
+        user_membership = request.user.usermembership
+        membership_status = "Paid" if user_membership.active else "Unpaid"
+    except UserMembership.DoesNotExist:
+        membership_status = "Unpaid"
 
     context = {
-        'form': form
+        'membership_status': membership_status,
     }
     return render(request, 'mobile/member_dashboard.html', context)
+
+
+@login_required
+def pay_membership(request):
+    user = request.user
+    user.profile.membership_status = "paid"
+    user.profile.save()
+    messages.success(request, "Membership paid successfully.")
+    return redirect('member_dashboard')
+
+@login_required
+def cancel_membership(request):
+    user = request.user
+    user.profile.membership_status = "unpaid"
+    user.profile.save()
+    messages.success(request, "Membership canceled successfully.")
+    return redirect('member_dashboard')
+
 
 
 def home_view(request):

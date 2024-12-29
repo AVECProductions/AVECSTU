@@ -2,15 +2,112 @@
 
 {% block title %}Member Dashboard{% endblock %}
 
+{% block extra_styles %}
+<style>
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: calc(100% - 40px);
+    }
+
+    .dashboard-container {
+        border: 1px solid #111;
+        background-color: #111;
+        padding: 20px;
+        width: 90%;
+        max-width: 400px;
+        min-width: 300px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+    }
+
+    .dashboard-container h2 {
+        text-align: center;
+        margin-bottom: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 5px;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"] {
+        width: 100%;
+        padding: 10px;
+        font-size: 14px;
+        background-color: #222;
+        border: 1px solid #555;
+        color: #ccc;
+        box-sizing: border-box;
+        border-radius: 4px;
+    }
+
+    .membership-status {
+        text-align: center;
+        margin: 20px 0;
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    button {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        font-size: 16px;
+        color: #fff;
+        background-color: #444;
+        border: none;
+        cursor: pointer;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+
+    button:hover {
+        background-color: #333;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div style="max-width: 600px; margin: auto; padding: 20px; background-color: #222; border-radius: 8px; color: #ccc;">
-    <h2 style="text-align: center;">Member Dashboard</h2>
+<div class="dashboard-container">
+    <h2>Member Dashboard</h2>
     <form method="POST">
         {% csrf_token %}
-        {{ form.as_p }}
-        <button type="submit" style="background-color: #444; color: #fff; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
-            Update Profile
-        </button>
+        <div class="form-group">
+            <label for="first_name">First Name:</label>
+            <input type="text" id="first_name" name="first_name" placeholder="Enter your first name" value="{{ user.first_name }}" required>
+        </div>
+        <div class="form-group">
+            <label for="last_name">Last Name:</label>
+            <input type="text" id="last_name" name="last_name" placeholder="Enter your last name" value="{{ user.last_name }}" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" placeholder="Enter your email" value="{{ user.email }}" required>
+        </div>
+        <div class="form-group">
+            <label for="phone">Phone Number:</label>
+            <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" value="{{ user.profile.phone }}" required>
+        </div>
+        <button type="submit">Update Profile</button>
     </form>
+    <div class="membership-status">Membership Status: {{ membership_status }}</div>
+    {% if membership_status == "Unpaid" %}
+        <button onclick="location.href='/pay-membership/'">Pay Membership</button>
+    {% else %}
+        <button onclick="location.href='/cancel-membership/'">Cancel Membership</button>
+    {% endif %}
 </div>
 {% endblock %}
