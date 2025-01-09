@@ -4,61 +4,86 @@
 
 {% block extra_styles %}
 <style>
-    .admin-dashboard {
-        max-width: 800px;
-        margin: auto;
-        padding: 20px;
-        background-color: #222;
-        border-radius: 8px;
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background-color: #000;
         color: #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: calc(100% - 40px);
     }
 
-    .admin-dashboard h2 {
+    .dashboard-container {
+        border: 1px solid #111;
+        background-color: #111;
+        padding: 20px;
+        width: 90%;
+        max-width: 400px;
+        min-width: 300px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+    }
+
+    .dashboard-container h2 {
         text-align: center;
         margin-bottom: 20px;
     }
 
-    .outlet-buttons {
-        display: flex;
-        justify-content: space-around;
-        align-items: center;
-        gap: 10px;
+    .form-group {
+        margin-bottom: 15px;
     }
 
-    .outlet-button {
-        flex: 1;
+    label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 5px;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"] {
+        width: 100%;
+        padding: 10px;
+        font-size: 14px;
+        background-color: #222;
+        border: 1px solid #555;
+        color: #ccc;
+        box-sizing: border-box;
+        border-radius: 4px;
+    }
+
+    .membership-status {
         text-align: center;
+        margin: 20px 0;
+        font-size: 16px;
+        font-weight: bold;
     }
 
-    .outlet-button button {
+    button {
+        display: block;
         width: 100%;
         padding: 10px;
         font-size: 16px;
+        color: #fff;
+        background-color: #444;
         border: none;
-        border-radius: 4px;
         cursor: pointer;
-        color: white;
-        transition: background-color 0.3s;
+        border-radius: 4px;
+        margin-top: 10px;
     }
 
-    .outlet-button .off {
-        background-color: #555; /* Default state: grey */
+    button:hover {
+        background-color: #333;
     }
 
-    .outlet-button .on {
-        background-color: #4CAF50; /* On state: green */
-    }
-
-    .outlet-button button:hover {
-        opacity: 0.9;
-    }
-
-    .create-invite {
+    .invite-container {
         margin-top: 30px;
         text-align: center;
     }
 
-    .create-invite a {
+    .invite-container a {
         display: inline-block;
         padding: 10px 20px;
         background-color: #444;
@@ -68,33 +93,67 @@
         transition: background-color 0.3s ease;
     }
 
-    .create-invite a:hover {
+    .invite-container a:hover {
+        background-color: #4CAF50;
+    }
+
+    .admin-console-container {
+        margin-top: 20px;
+        text-align: center;
+    }
+
+    .admin-console-container a {
+        display: inline-block;
+        padding: 10px 20px;
+        background-color: #444;
+        color: #fff;
+        text-decoration: none;
+        border-radius: 4px;
+        transition: background-color 0.3s ease;
+    }
+
+    .admin-console-container a:hover {
         background-color: #4CAF50;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="admin-dashboard">
+<div class="dashboard-container">
     <h2>Admin Dashboard</h2>
-    {% if message %}
-        <p style="text-align: center; color: #4CAF50; font-weight: bold;">{{ message }}</p>
-    {% endif %}
     <form method="POST">
         {% csrf_token %}
-        <div class="outlet-buttons">
-            {% for outlet in outlets %}
-            <div class="outlet-button">
-                <button type="submit" name="outlet" value="{{ outlet.name }}" class="{{ outlet.state }}">
-                    {{ outlet.display_name }}
-                </button>
-            </div>
-            {% endfor %}
+        <div class="form-group">
+            <label for="first_name">First Name:</label>
+            <input type="text" id="first_name" name="first_name" placeholder="Enter your first name" value="{{ user.first_name }}" required>
         </div>
+        <div class="form-group">
+            <label for="last_name">Last Name:</label>
+            <input type="text" id="last_name" name="last_name" placeholder="Enter your last name" value="{{ user.last_name }}" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" placeholder="Enter your email" value="{{ user.email }}" required>
+        </div>
+        <div class="form-group">
+            <label for="phone">Phone Number:</label>
+            <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" value="{{ user.profile.phone }}" required>
+        </div>
+        <button type="submit">Update Profile</button>
     </form>
+    <div class="membership-status">Membership Status: {{ membership_status }}</div>
+    {% if membership_status == "Unpaid" %}
+        <button onclick="location.href='/pay-membership/'">Pay Membership</button>
+    {% else %}
+        <button onclick="location.href='/cancel-membership/'">Cancel Membership</button>
+    {% endif %}
 
-    <div class="create-invite">
+    <div class="invite-container">
         <a href="{{ create_invite_url }}">Create Invite Link</a>
+    </div>
+
+    <div class="admin-console-container">
+        <a href="/{{ admin_url }}" target="_blank">Go to Admin Console</a>
     </div>
 </div>
 {% endblock %}

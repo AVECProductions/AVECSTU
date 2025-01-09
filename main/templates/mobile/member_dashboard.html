@@ -109,5 +109,8 @@
     {% else %}
         <button onclick="location.href='/cancel-membership/'">Cancel Membership</button>
     {% endif %}
+
+    <!-- Manage Sessions Button -->
+    <button onclick="location.href='{% url 'session_manager' %}'">Manage Sessions</button>
 </div>
 {% endblock %}

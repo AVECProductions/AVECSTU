@@ -37,6 +37,9 @@ LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'  # Redirect after successful login
 LOGOUT_REDIRECT_URL = '/'  # Redirect after logout
 
+#Admin URL
+ADMIN_URL = config('ADMIN_URL')
+
 
 # Get security stuff
 ALLOWED_HOSTS = config("ALLOWED_HOSTS").split(",")

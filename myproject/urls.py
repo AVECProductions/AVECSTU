@@ -22,4 +22,5 @@ urlpatterns = [
     path("admin-dashboard/", admin_dashboard, name="admin_dashboard"),
     path("pay-membership/", pay_membership, name="pay_membership"),
     path("cancel-membership/", cancel_membership, name="cancel_membership"),
+    path('session-manager/', session_manager_view, name='session_manager'),
 ]

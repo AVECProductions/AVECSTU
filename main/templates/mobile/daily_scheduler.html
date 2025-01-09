@@ -15,12 +15,7 @@
         padding: 10px;
     }
 
-    .header {
-        font-size: 24px;
-        margin-bottom: 10px;
-        text-align: center;
-    }
-
+    /* Back button in upper-left corner */
     .back-icon {
         position: absolute;
         top: 10px;
@@ -32,20 +27,39 @@
         align-items: center;
         gap: 5px;
     }
-
     .back-icon:hover {
         color: #fff;
     }
 
-    .navigator {
+    /* Header + date in one container with reduced spacing */
+    .header-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 8px; /* reduced spacing */
+    }
+    .header {
+        font-size: 24px;
+        margin-bottom: 5px;
+        text-align: center;
+    }
+    .date-display {
+        font-size: 16px;  /* visually smaller date */
+        color: #bbb;
+    }
+
+    /* Buttons container: Previous, Book, Next in one row */
+    .controls-container {
         display: flex;
         justify-content: space-between;
+        align-items: center;
         width: 100%;
         max-width: 500px;
         min-width: 350px;
         margin-bottom: 10px;
     }
 
+    /* Navigation + Book button styling */
     .nav-button {
         background-color: #333;
         color: #fff;
@@ -53,56 +67,105 @@
         padding: 10px;
         cursor: pointer;
         border-radius: 5px;
+        width: 70px; /* Set a fixed width for consistency */
+        text-align: center; /* Ensure the text is centered */
     }
 
+    .book-button {
+        background-color: #333;
+        color: #fff;
+        border: none;
+        padding: 10px;
+        cursor: pointer;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .nav-button:hover {
+        background-color: #444;
+    }
+
+    /* By default, keep the Book button space in the layout but hidden.
+       We'll make it visible by adding .active via JS. */
+    .book-button {
+        visibility: hidden;
+        background-color: #30cf73;
+        color: #fff;
+        /* You can also use opacity: 0; if you prefer.
+           visibility keeps the space reserved in the layout. */
+    }
+    .book-button.active {
+        visibility: visible;
+    }
+    .book-button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+    }
+
+    /* Layout for time slots */
     .time-slot {
         display: flex;
         justify-content: space-between;
         padding: 10px;
         background-color: #222;
-        margin: 5px 0;
-        margin-right: 100px;
-        margin-left: 100px;
+        margin: 5px 100px; /* left/right margins to center on larger screens */
         border-radius: 5px;
         text-decoration: none;
         color: #ccc;
     }
-
     .time-slot .time {
         flex: 1;
         text-align: left;
     }
-
     .time-slot .status {
         flex: 1;
         text-align: right;
     }
 
-    .time-slot.unavailable,
+    /* Booked/unavailable states */
     .time-slot.reserved,
-    .time-slot.pending {
-        background-color: #444;
+    .time-slot.pending,
+    .time-slot.requested {
         cursor: not-allowed;
         pointer-events: none;
     }
+    .time-slot.reserved  { background-color: #555; }
+    .time-slot.pending   { background-color: #666; }
+    .time-slot.requested { background-color: #666; }
 
-    .time-slot.reserved {
-        background-color: #555;
-    }
-
-    .time-slot.pending {
-        background-color: #666;
-    }
-
-    .time-slot.requested {
-    background-color: #666;
-    cursor: not-allowed;
-    pointer-events: none;
-    }
-
-
-    .time-slot:hover {
+    /* Hover for available slots (non-member) */
+    .time-slot.available:hover {
         background-color: #777;
+    }
+
+    /* Selected by user -> green highlight */
+    .time-slot.selected {
+        background-color: #27ae60;
+        color: #fff;
+    }
+    .time-slot.selected:hover {
+        background-color: #30cf73;
+        color: #fff;
+    }
+
+    /* Hide the form's content only if you really need to,
+       but keep the form in the DOM so the button stays in layout. */
+    #bookForm {
+        margin: 0; /* no extra vertical spacing */
+    }
+
+    /* Messages styling */
+    .messages {
+        width: 100%;
+        max-width: 400px;
+        margin-bottom: 10px;
+    }
+    .alert {
+        padding: 10px;
+        background-color: #333;
+        color: #fff;
+        border-radius: 5px;
+        margin-bottom: 5px;
     }
 </style>
 {% endblock %}
@@ -115,29 +178,45 @@
 
 <!-- Messages -->
 {% if messages %}
-    <div class="messages" style="width:100%; max-width:400px; margin-bottom:10px;">
+    <div class="messages">
         {% for message in messages %}
-            <div class="alert alert-{{ message.tags }}" style="padding:10px; background-color:#333; color:#fff; border-radius:5px; margin-bottom:5px;">
+            <div class="alert alert-{{ message.tags }}">
                 {{ message }}
             </div>
         {% endfor %}
     </div>
 {% endif %}
 
-<div class="header">Studio Scheduler</div>
+<!-- Header + Date together -->
+<div class="header-container">
+    <div class="header">Studio Scheduler</div>
+    <div class="date-display">{{ selected_date|date:"l, F j" }}</div>
+</div>
 
-<!-- Navigator -->
-<div class="navigator">
-    {% if can_go_previous %}
-        <a href="?date={{ previous_date }}">
-            <button class="nav-button">Previous</button>
-        </a>
-    {% else %}
-        <button class="nav-button" style="opacity: 0.5; cursor: not-allowed;">Previous</button>
+<!-- Combined Navigation + Book container -->
+<div class="controls-container">
+    <!-- Previous Button -->
+    <a href="?date={{ previous_date }}">
+        <button class="nav-button"
+                {% if not can_go_previous %}disabled style="opacity:0.5; cursor:not-allowed;"{% endif %}>
+            Previous
+        </button>
+    </a>
+
+    <!-- Booking Form and Button (only if user is a member) -->
+    {% if is_member %}
+    <form method="POST" id="bookForm" action="?date={{ selected_date|date:"Y-m-d" }}">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="book_selected">
+        <input type="hidden" name="selected_hours" id="selectedHours" value="">
+        <!-- Keep the button in the layout, hidden by default -->
+        <button type="submit" id="bookButton" class="book-button" disabled>
+            Book Selected Sessions
+        </button>
+    </form>
     {% endif %}
 
-    <div>{{ selected_date|date:"l, F j" }}</div>
-
+    <!-- Next Button -->
     <a href="?date={{ next_date }}">
         <button class="nav-button">Next</button>
     </a>
@@ -145,38 +224,87 @@
 
 <!-- Time Slots -->
 <div>
-    {% for time_slot in time_slots %}
-        {% if time_slot.status == "unavailable" %}
-            <div class="time-slot unavailable">
-                <span class="time">{{ time_slot.hour }}:00</span>
-                <span class="status">Unavailable</span>
-            </div>
-        {% elif time_slot.status == "reserved" %}
-            <!-- Paid -->
-            <div class="time-slot reserved">
-                <span class="time">{{ time_slot.hour }}:00</span>
-                <span class="status">{{ time_slot.booked_by }}</span>
-            </div>
-        {% elif time_slot.status == "pending" %}
-            <!-- Approved but not paid -->
-            <div class="time-slot pending">
-                <span class="time">{{ time_slot.hour }}:00</span>
-                <span class="status">{{ time_slot.booked_by }}</span>
-            </div>
-        {% elif time_slot.status == "requested" %}
-            <!-- Requested but not approved -->
-            <div class="time-slot requested">
-                <span class="time">{{ time_slot.hour }}:00</span>
-                <span class="status">{{ time_slot.booked_by }}</span>
+    {% for slot in time_slots %}
+        {% if slot.status == "reserved" or slot.status == "pending" or slot.status == "requested" %}
+            <!-- Booked or blocked slot -->
+            <div class="time-slot {{ slot.status }}">
+                <span class="time">{{ slot.hour }}:00</span>
+                <span class="status">
+                    {% if slot.status == "reserved" %}
+                        {% if is_member and slot.booked_by_name %}
+                            {{ slot.booked_by_name }}
+                        {% else %}
+                            Booked
+                        {% endif %}
+                    {% else %}
+                        {{ slot.booked_by_name }}
+                    {% endif %}
+                </span>
             </div>
         {% else %}
-            <!-- Available -->
-            <a href="/reservation/?date={{ selected_date|date:"Y-m-d" }}&time={{ time_slot.hour }}:00" class="time-slot">
-                <span class="time">{{ time_slot.hour }}:00</span>
-                <span class="status">Available</span>
-            </a>
+            <!-- If not reserved/pending/requested => assume 'available' -->
+            {% if slot.status == "available" %}
+                {% if is_member %}
+                    <!-- Member can click to select/unselect with JS -->
+                    <div class="time-slot available"
+                         data-hour="{{ slot.hour }}"
+                         onclick="toggleSlotSelection(this)">
+                        <span class="time">{{ slot.hour }}:00</span>
+                        <span class="status">Available</span>
+                    </div>
+                {% else %}
+                    <!-- Non-member => link to request form -->
+                    <a href="/reservation/?date={{ selected_date|date:'Y-m-d' }}&time={{ slot.hour }}:00"
+                       class="time-slot available">
+                        <span class="time">{{ slot.hour }}:00</span>
+                        <span class="status">Available</span>
+                    </a>
+                {% endif %}
+            {% endif %}
         {% endif %}
     {% endfor %}
 </div>
 
+<!-- JavaScript for toggling selection and button visibility -->
+<script>
+let selectedHours = [];
+const maxCredits = {{ max_credits|default:0 }};
+const bookForm = document.getElementById("bookForm");
+const bookButton = document.getElementById("bookButton");
+
+function toggleSlotSelection(slotDiv) {
+    const hour = parseInt(slotDiv.getAttribute("data-hour"));
+
+    // If this hour is already selected, unselect it
+    if (selectedHours.includes(hour)) {
+        selectedHours = selectedHours.filter(h => h !== hour);
+        slotDiv.classList.remove("selected");
+    } else {
+        // If we haven't exceeded membership credits, select
+        if (selectedHours.length < maxCredits) {
+            selectedHours.push(hour);
+            slotDiv.classList.add("selected");
+        } else {
+            alert("You do not have enough credits to select more hours!");
+        }
+    }
+
+    // Toggle the button's disabled state and visibility
+    if (selectedHours.length === 0) {
+        bookButton.disabled = true;
+        bookButton.classList.remove("active");
+    } else {
+        bookButton.disabled = false;
+        bookButton.classList.add("active");
+    }
+}
+
+// Put the selected hours into a hidden input on submit
+if (bookForm) {
+    bookForm.addEventListener("submit", function() {
+        const hiddenInput = document.getElementById("selectedHours");
+        hiddenInput.value = selectedHours.join(",");
+    });
+}
+</script>
 {% endblock %}
