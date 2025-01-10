@@ -18,7 +18,7 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 @csrf_exempt
 def stripe_webhook(request):
     """
-    Receives Stripe Webhook events for subscription management.
+    Receives Stripe Webhook events for subscription management and session reservations.
     """
     payload = request.body
     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
@@ -34,7 +34,15 @@ def stripe_webhook(request):
     # Handle specific event types
     if event['type'] == 'checkout.session.completed':
         session = event['data']['object']
-        handle_successful_payment(session)
+
+        # Determine if this is a subscription or a single session
+        if 'subscription' in session:
+            # Handle subscription payment
+            handle_successful_payment(session)
+        elif 'metadata' in session and 'reservation_id' in session['metadata']:
+            # Handle single session reservation
+            handle_reservation_payment(session)
+
     elif event['type'] == 'invoice.payment_failed':
         subscription_id = event['data']['object'].get('subscription')
         if subscription_id:
@@ -81,3 +89,26 @@ def handle_failed_payment(subscription_id):
         print(f"No membership found for subscription ID: {subscription_id}")
     except Exception as e:
         print(f"Error in handle_failed_payment: {e}")
+
+def handle_reservation_payment(session):
+    """
+    Marks a session reservation as paid.
+    """
+    try:
+        reservation_id = session['metadata']['reservation_id']
+
+        from .models import PendingSessionRequest
+        reservation = PendingSessionRequest.objects.get(id=reservation_id)
+        reservation.status = "paid"
+        reservation.save()
+
+        # Optionally, send a confirmation email
+        from .emails import send_reservation_payment_confirmation_email
+        send_reservation_payment_confirmation_email(reservation)
+
+    except KeyError:
+        print("No 'reservation_id' in checkout.session.metadata.")
+    except PendingSessionRequest.DoesNotExist:
+        print(f"Reservation with ID {session['metadata'].get('reservation_id')} not found.")
+    except Exception as e:
+        print(f"Error in handle_reservation_payment: {e}")
