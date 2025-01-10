@@ -98,7 +98,9 @@
     <div class="button-container">
         <a href="/monthly-calendar/" class="home-button">Schedule Session</a>
         {% if is_logged_in %}
-            {% if is_operator %}
+            {% if is_admin %}
+                <a href="/admin-dashboard/" class="home-button">Admin Dashboard</a>
+            {% elif is_operator %}
                 <a href="/operator-dashboard/" class="home-button">Operator Dashboard</a>
             {% elif is_member %}
                 <a href="/member-dashboard/" class="home-button">Member Dashboard</a>

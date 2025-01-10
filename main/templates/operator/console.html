@@ -180,9 +180,9 @@
     {% for request in pending_requests %}
     <div class="request-card">
         <div class="request-details">
-            <p><strong>Name:</strong> {{ request.name }}</p>
-            <p><strong>Email:</strong> {{ request.email }}</p>
-            <p><strong>Phone:</strong> {{ request.phone }}</p>
+            <p><strong>Name:</strong> {{ request.requester_name }}</p>
+            <p><strong>Email:</strong> {{ request.requester_email }}</p>
+            <p><strong>Phone:</strong> {{ request.requester_phone }}</p>
             <p><strong>Date:</strong> {{ request.requested_date }}</p>
             <p><strong>Time:</strong> {{ request.requested_time }}</p>
             <p><strong>Notes:</strong> {{ request.notes|default:"None" }}</p>

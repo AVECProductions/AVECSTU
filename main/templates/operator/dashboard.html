@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Dashboard{% endblock %}
+{% block title %}Operator Dashboard{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -82,20 +82,14 @@
 
 {% block content %}
 <div class="dashboard-container">
-    <h2>Admin Dashboard</h2>
+    <h2>Operator Dashboard</h2>
 
-    <!-- Admin Features -->
-    <a href="/{{ admin_url }}" class="dashboard-button" target="_blank">Admin Console</a>
-    <a href="{% url 'create_invite' %}" class="dashboard-button">Create Invite Link</a>
-
-    <!-- Operator Features -->
+    <!-- Operator-Specific Options -->
     <a href="{% url 'operator_console' %}" class="dashboard-button">Operator Console</a>
 
-    <!-- Member Features -->
+    <!-- Member Options -->
     <a href="{% url 'member_profile' %}" class="dashboard-button">Update Profile</a>
     <a href="{% url 'membership_management' %}" class="dashboard-button">Manage Membership</a>
     <a href="{% url 'session_manager' %}" class="dashboard-button">Session Manager</a>
-
-
 </div>
 {% endblock %}

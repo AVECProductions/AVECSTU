@@ -1,40 +1,42 @@
+# main/views.py
+
 from django.shortcuts import render, redirect, get_object_or_404
-from django.core.mail import send_mail, EmailMessage
+from django.core.mail import EmailMessage
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponseForbidden
-from django.utils.timezone import localtime, now, timedelta
-from django.utils.crypto import get_random_string
+from django.utils.timezone import localtime, now, timedelta, make_aware
 from django.conf import settings
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
-from .payments import send_rejection_email, send_payment_email_stripe, send_cancelation_confirmation_email
-
-import stripe
-import calendar
+from django.urls import reverse
 from datetime import datetime
-import requests
+import calendar
 
-# Forms (if any)
-from .forms import ProfileUpdateForm
-
-# Models
+# Models & Forms
 from .models import (
-    PendingSessionRequest,       # REPLACES old 'ActiveRequest'
+    PendingSessionRequest,
     BookedSession,
     Invite,
     UserMembership,
     UserProfile,
 )
+from .forms import ProfileUpdateForm
 
-# Configure Stripe
-stripe.api_key = settings.STRIPE_SECRET_KEY
-BASE_URL = settings.DOMAIN  # e.g., "https://yourdomain.com"
+# Services & Emails
+from .services import (
+    cancel_stripe_subscription,
+)
+from .emails import (
+    send_rejection_email,
+    send_payment_email_stripe,
+    send_cancelation_confirmation_email,
+    send_invite_email,
+    notify_operators_of_new_request
+)
 
-# ------------------------------------------
-# ROLE-BASED DECORATOR
-# ------------------------------------------
+# Decorators
 def role_required(role):
     """
     A decorator restricting access to a particular role
@@ -47,6 +49,82 @@ def role_required(role):
             return HttpResponseForbidden("You do not have permission to access this page.")
         return _wrapped_view
     return decorator
+
+
+# ------------------------------------------
+# HOME & AUTHENTICATION
+# ------------------------------------------
+def home_view(request):
+    """
+    Public home page (not password protected).
+    Shows different dashboard options based on user roles.
+    """
+    user = request.user
+    is_admin = False
+    is_operator = False
+    is_member = False
+
+    if user.is_authenticated:
+        profile = getattr(user, "profile", None)
+        if profile:
+            # Check for admin role
+            is_admin = profile.has_minimum_role("admin")
+            # Check for operator role
+            is_operator = profile.has_minimum_role("operator")
+            # Check for member role
+            is_member = profile.has_minimum_role("member")
+
+    context = {
+        'is_logged_in': user.is_authenticated,
+        'is_admin': is_admin,
+        'is_operator': is_operator,
+        'is_member': is_member,
+        'current_time': now(),
+    }
+    return render(request, 'main/home.html', context)
+
+
+def member_login_view(request):
+    """
+    Standard Django authentication (username/password).
+    """
+    error = None
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+        user = authenticate(request, username=username, password=password)
+
+        if user:
+            login(request, user)
+            return redirect('home')
+        else:
+            error = "Invalid credentials. Please try again."
+
+    return render(request, 'credential/member_login.html', {'error': error})
+
+
+def guest_login_view(request):
+    """
+    Allows a user to log in as 'public' via a shared password.
+    """
+    error = None
+    if request.method == "POST":
+        guest_password = request.POST.get("password")
+
+        user = authenticate(username="public", password=guest_password)
+        if user:
+            login(request, user)
+            return redirect("reservation_form")
+        else:
+            error = "Guest login failed. Please try again."
+
+    return render(request, "credential/guest_login.html", {"error": error})
+
+
+@login_required
+def member_logout_view(request):
+    logout(request)
+    return redirect('home')
 
 
 # ------------------------------------------
@@ -63,6 +141,7 @@ def member_dashboard_view(request):
     }
     return render(request, "member/dashboard.html", context)
 
+
 @login_required
 def member_profile(request):
     """
@@ -78,7 +157,7 @@ def member_profile(request):
         user_profile.first_name = request.POST.get("first_name", user_profile.user.first_name)
         user_profile.last_name = request.POST.get("last_name", user_profile.user.last_name)
         user_profile.email = request.POST.get("email", user_profile.user.email)
-        user_profile.phone = request.POST.get("phone", user_profile.user.email)
+        user_profile.phone = request.POST.get("phone", user_profile.user.phone)
         user_profile.save()
 
         # Update Django's User model
@@ -103,12 +182,12 @@ def member_profile(request):
     }
     return render(request, "member/profile.html", context)
 
+
 @login_required
 def membership_management_view(request):
     """
     Allows members to view and manage their membership status.
     """
-    # Retrieve the user's membership status
     try:
         membership = request.user.usermembership
         membership_status = "Paid" if membership.active else "Unpaid"
@@ -120,6 +199,7 @@ def membership_management_view(request):
     }
     return render(request, "member/membership_management.html", context)
 
+
 @login_required
 def session_manager_view(request):
     """
@@ -127,11 +207,6 @@ def session_manager_view(request):
     They can view and cancel their own bookings.
     """
     user = request.user
-
-    # Get the current time
-    current_time = now()
-
-    # Combine booked_date and booked_start_time into a datetime for comparison
     booked_sessions = BookedSession.objects.filter(
         booked_by=user,
         status='booked',
@@ -140,11 +215,10 @@ def session_manager_view(request):
 
     if request.method == "POST":
         session_id = request.POST.get('session_id')
-
         if session_id:
             try:
                 booked_session = BookedSession.objects.get(id=session_id, booked_by=user)
-                booked_session.status = "canceled"  # Mark the session as canceled
+                booked_session.status = "canceled"
                 booked_session.save()
                 messages.success(request, "Session successfully canceled.")
             except BookedSession.DoesNotExist:
@@ -152,200 +226,78 @@ def session_manager_view(request):
             except Exception as e:
                 print(f"Error canceling the session: {e}")
                 messages.error(request, "An error occurred while canceling the session.")
-
         return redirect('session_manager')
 
     context = {'booked_sessions': booked_sessions}
     return render(request, 'member/session_manager.html', context)
 
-# ------------------------------------------
-# Membership management
-# ------------------------------------------
 
+# ------------------------------------------
+# Membership Payment Views
+# ------------------------------------------
 @login_required
 def pay_membership(request):
     """
     Redirects the user to Stripe Checkout for membership payment.
     """
     user = request.user
+    stripe_price_id = "price_1Qaizu08vvVeCKwuAKr9zXca"  # Example price ID
 
-    # Stripe price ID for the membership (replace with your actual price ID)
-    stripe_price_id = "price_1Qaizu08vvVeCKwuAKr9zXca"
+    import stripe
+    stripe.api_key = settings.STRIPE_SECRET_KEY
 
     try:
-        # Create a Stripe Checkout session
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             mode='subscription',
-            line_items=[
-                {
-                    'price': stripe_price_id,
-                    'quantity': 1,
-                },
-            ],
-            metadata={
-                'user_id': user.id,  # Include user information for webhook handling
-            },
+            line_items=[{"price": stripe_price_id, "quantity": 1}],
+            metadata={'user_id': user.id},
             success_url=request.build_absolute_uri('/membership-management/'),
             cancel_url=request.build_absolute_uri('/membership-management/'),
         )
-
-        # Redirect to Stripe Checkout
         return redirect(checkout_session.url, code=303)
-
     except Exception as e:
         messages.error(request, f"An error occurred: {str(e)}")
-        print("error")
+        print(f"Error creating Stripe Checkout Session: {e}")
         return redirect("membership_management")
 
+
+@login_required
 def cancel_membership(request):
     """
     Cancels the user's membership and the associated Stripe subscription.
     """
     user = request.user
-
     try:
-        # Retrieve the user's membership
         membership = user.usermembership
-
-        # Check if the membership is active
         if membership.active and membership.stripe_subscription_id:
-            # Cancel the subscription on Stripe
+            # Cancel on Stripe
             success = cancel_stripe_subscription(user)
             if success:
-                # Update membership status in the database
                 membership.active = False
                 membership.stripe_subscription_id = None
                 membership.save()
-
-                # Optionally send a cancellation confirmation email
+                # Email confirmation
                 send_cancelation_confirmation_email(user)
-
                 messages.success(request, "Your membership has been successfully canceled.")
             else:
                 messages.error(request, "There was an issue canceling your membership. Please try again.")
         else:
             messages.error(request, "You do not have an active membership to cancel.")
-
     except UserMembership.DoesNotExist:
         messages.error(request, "You do not have a membership to cancel.")
 
     return redirect("membership_management")
 
-def cancel_stripe_subscription(user):
-    """
-    Cancels the user's Stripe subscription.
-    Args:
-        user: The user whose subscription needs to be canceled.
-
-    Returns:
-        bool: True if the subscription was successfully canceled, False otherwise.
-    """
-    try:
-        # Get the user's membership
-        membership = UserMembership.objects.get(user=user)
-
-        # Check if the membership has an active Stripe subscription
-        if membership.stripe_subscription_id:
-            # Use Stripe API to delete the subscription
-            stripe.Subscription.delete(membership.stripe_subscription_id)
-
-            # Update the membership status
-            membership.active = False
-            membership.stripe_subscription_id = None
-            membership.save()
-
-            return True  # Cancellation was successful
-        else:
-            return False  # No active subscription to cancel
-    except UserMembership.DoesNotExist:
-        print(f"Membership does not exist for user {user.username}.")
-        return False
-    except stripe.error.StripeError as e:
-        print(f"Stripe error during subscription cancellation: {e}")
-        return False
-
-
 
 # ------------------------------------------
-# HOME & AUTHENTICATION
-# ------------------------------------------
-def home_view(request):
-    """
-    Public home page (not password protected).
-    Shows different dashboard options based on user roles.
-    """
-    user = request.user
-    is_operator = False
-    is_member = False
-
-    if user.is_authenticated:
-        profile = getattr(user, "profile", None)
-        if profile:
-            is_operator = profile.has_minimum_role("operator")
-            is_member = profile.has_minimum_role("member")
-
-    context = {
-        'is_logged_in': user.is_authenticated,
-        'is_operator': is_operator,
-        'is_member': is_member,
-        'current_time': now(),
-    }
-    return render(request, 'mobile/home.html', context)
-
-
-def member_login_view(request):
-    """
-    Standard Django authentication (username/password).
-    """
-    error = None
-    if request.method == "POST":
-        username = request.POST.get("username")
-        password = request.POST.get("password")
-        user = authenticate(request, username=username, password=password)
-
-        if user:
-            login(request, user)
-            return redirect('home')
-        else:
-            error = "Invalid credentials. Please try again."
-
-    return render(request, 'mobile/member_login.html', {'error': error})
-
-
-def guest_login_view(request):
-    """
-    Allows a user to log in as 'public' via a shared password.
-    """
-    error = None
-    if request.method == "POST":
-        guest_password = request.POST.get("password")
-
-        user = authenticate(username="public", password=guest_password)
-        if user:
-            login(request, user)
-            return redirect("reservation_form")
-        else:
-            error = "Guest login failed. Please try again."
-
-    return render(request, "mobile/guest_login.html", {"error": error})
-
-
-@login_required
-def member_logout_view(request):
-    logout(request)
-    return redirect('home')
-
-
-# ------------------------------------------
-# RESERVATION FORM (PendingSessionRequest)
+# RESERVATION FORM & CALENDAR
 # ------------------------------------------
 @login_required
 def reservation_form_view(request):
     """
     Allows guests or members to submit a session request.
-    For members who do not have auto-booking privileges (or if code not yet added),
-    it creates a PendingSessionRequest.
+    Creates a PendingSessionRequest for operator approval.
     """
     if request.method == "POST":
         name = request.POST.get("name")
@@ -355,8 +307,6 @@ def reservation_form_view(request):
         time_ = request.GET.get("time")
         hours = request.POST.get("hours", 1)
         notes = request.POST.get("notes", "")
-
-        print(f"Date received from form: {date}")
 
         # Validate date/time
         if not date or not time_:
@@ -382,65 +332,38 @@ def reservation_form_view(request):
             status="pending",
         )
 
-        # Notify all operators (assuming you have a Django Group named "Operator", or filter by role)
+        # Notify operators
         operators = User.objects.filter(groups__name="Operator")
         operator_emails = [op.email for op in operators if op.email]
 
         if operator_emails:
-            email_content = f"""
-            <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.5; max-width: 600px; margin: auto;">
-                <h2 style="color: #000;">New Reservation Request</h2>
-                <p>A new reservation request has been submitted with the following details:</p>
-                <ul style="padding-left: 20px; color: #555;">
-                    <li><strong>Name:</strong> {name}</li>
-                    <li><strong>Email:</strong> {email}</li>
-                    <li><strong>Phone:</strong> {phone}</li>
-                    <li><strong>Date:</strong> {date}</li>
-                    <li><strong>Time:</strong> {time_}</li>
-                    <li><strong>Duration:</strong> {hours} hour(s)</li>
-                    <li><strong>Notes:</strong> {notes or 'No additional notes'}</li>
-                </ul>
-                <p>Click the button below to review this request in the Operator Dashboard:</p>
-                <div style="text-align: center; margin: 20px 0;">
-                    <a href="{settings.BASE_URL}/operator-dashboard/"
-                       style="background-color: #007bff; color: #fff; text-decoration: none; padding: 10px 20px; border-radius: 5px; font-size: 16px;">
-                        View Operator Dashboard
-                    </a>
-                </div>
-                <p style="color: #777;">Thank you,</p>
-                <p style="color: #777;"><strong>AVEC Studios</strong></p>
-            </div>
-            """
-
-            msg = EmailMessage(
-                subject="New Reservation Request Submitted",
-                body=email_content,
-                from_email=settings.DEFAULT_FROM_EMAIL,
-                to=operator_emails
+            # Instead of building the email inline, call our new function
+            notify_operators_of_new_request(
+                name=name,
+                email=email,
+                phone=phone,
+                date_str=date,       # pass the raw string or use requested_date.isoformat()
+                time_str=time_,      # pass the raw time string
+                hours=hours,
+                notes=notes,
+                operator_emails=operator_emails
             )
-            msg.content_subtype = "html"
-            msg.send()
 
         messages.success(request, "Your reservation request has been submitted.")
         return redirect("home")
 
-    return render(request, "mobile/reservation_form.html")
+    return render(request, "main/reservation_form.html")
 
 
-# ------------------------------------------
-# MONTHLY CALENDAR
-# ------------------------------------------
 def monthly_calendar_view(request):
     """
-    Shows a monthly calendar.
-    Limits to 2 months in the future.
+    Shows a monthly calendar, limited to 2 months in the future.
     """
     today = localtime(now()).date()
     two_months_from_now = today + timedelta(days=60)
 
     year = request.GET.get("year")
     month = request.GET.get("month")
-
     if year and month:
         try:
             year = int(year)
@@ -475,7 +398,6 @@ def monthly_calendar_view(request):
 
     month_name = requested_date.strftime("%B %Y")
 
-    # Prev/Next logic
     prev_year, prev_month = year, month - 1
     if prev_month < 1:
         prev_month = 12
@@ -501,32 +423,25 @@ def monthly_calendar_view(request):
         'can_go_next': can_go_next,
         'today': today,
     }
-    return render(request, 'mobile/monthly_calendar.html', context)
+    return render(request, 'main/monthly_calendar.html', context)
 
-
-# ------------------------------------------
-# DAILY SCHEDULER
-# ------------------------------------------
-from django.utils.timezone import make_aware
 
 @login_required
 def daily_scheduler_view(request):
     """
-    Displays a day-by-day schedule.
-    - Members can multi-select available slots and instantly book them if they have enough credits.
-    - Non-members see a link to the reservation form.
-    - Shows the actual name of the user who booked the slot to other members,
-      otherwise it just says "Booked."
+    Displays a day-by-day schedule:
+      - Members can multi-select available slots and instantly book them
+        if they have enough credits.
+      - Non-members see a link to the reservation form.
     """
     today = localtime(now()).date()
     selected_date_str = request.GET.get('date', today.isoformat())
     selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
 
-    # Disallow booking in the past
     if selected_date < today:
         return redirect(f"/daily-scheduler/?date={today.isoformat()}")
 
-    # Handle POST: user is trying to instantly book multiple hours
+    # Handle POST to instantly book multiple hours
     if request.method == "POST" and request.POST.get("action") == "book_selected":
         if request.user.profile.has_minimum_role('member'):
             selected_hours_str = request.POST.get("selected_hours", "")
@@ -550,7 +465,7 @@ def daily_scheduler_view(request):
                             booked_by=request.user,
                             booked_date=selected_date,
                             booked_start_time=booked_start_time,
-                            booked_datetime=booked_datetime_aware,  # Set the booked_datetime field
+                            booked_datetime=booked_datetime_aware,
                             duration_hours=1,
                             status="booked"
                         )
@@ -568,55 +483,37 @@ def daily_scheduler_view(request):
 
         return redirect(f"/daily-scheduler/?date={selected_date.isoformat()}")
 
-    # 1) Gather booked sessions for this date
+    # Gather booked sessions
     booked_sessions = BookedSession.objects.filter(
         booked_date=selected_date,
-        status__in=["booked", "paid"]  # Include only these statuses
+        status__in=["booked", "paid"]
     )
-
-    # We'll map hour -> (status, booked_by_name)
     booked_map = {}
     for session in booked_sessions:
         h = session.booked_start_time.hour
-        # We'll store status="reserved" or "booked" (whatever label you want).
-        # We'll capture the user name for display if viewer is a member.
-        if session.booked_by:
-            user_name = session.booked_by.get_full_name() or session.booked_by.username
-        else:
-            user_name = None
+        user_name = session.booked_by.get_full_name() or session.booked_by.username if session.booked_by else None
         booked_map[h] = {
             "status": "reserved",
             "booked_by_name": user_name
         }
 
-    # 2) If you want to account for pending requests
+    # Gather pending requests
     pending_requests = PendingSessionRequest.objects.filter(
         requested_date=selected_date,
         status__in=["pending", "approved", "paid"]
     )
-
     pending_map = {}
     for req in pending_requests:
         start_hour = req.requested_time.hour
         end_hour = start_hour + req.hours
         for h in range(start_hour, end_hour):
             if req.status == "approved":
-                pending_map[h] = {
-                    "status": "pending",
-                    "booked_by_name": "Pending"
-                }
+                pending_map[h] = {"status": "pending", "booked_by_name": "Pending"}
             elif req.status == "paid":
-                pending_map[h] = {
-                    "status": "reserved",
-                    "booked_by_name": "Paid"
-                }
-            else:  # "pending" or other
-                pending_map[h] = {
-                    "status": "requested",
-                    "booked_by_name": "Requested"
-                }
+                pending_map[h] = {"status": "reserved", "booked_by_name": "Paid"}
+            else:
+                pending_map[h] = {"status": "requested", "booked_by_name": "Requested"}
 
-    # Build time slots (e.g. from 8:00 to 23:00 or from 'now' to 23:00)
     start_hour = localtime(now()).hour if selected_date == today else 8
     time_slots = []
     for hour in range(start_hour, 24):
@@ -625,8 +522,6 @@ def daily_scheduler_view(request):
             time_slots.append({
                 "hour": hour,
                 "status": info["status"],
-                # We'll store the raw name,
-                # but decide how to show it in the template
                 "booked_by_name": info["booked_by_name"]
             })
         elif hour in pending_map:
@@ -637,7 +532,6 @@ def daily_scheduler_view(request):
                 "booked_by_name": info["booked_by_name"]
             })
         else:
-            # available
             time_slots.append({
                 "hour": hour,
                 "status": "available",
@@ -647,9 +541,7 @@ def daily_scheduler_view(request):
     previous_date = (selected_date - timedelta(days=1)).isoformat()
     next_date = (selected_date + timedelta(days=1)).isoformat()
     can_go_previous = (selected_date > today)
-
-    # Figure out if current viewer is a member & how many credits
-    is_member = (request.user.profile.has_minimum_role('member'))
+    is_member = request.user.profile.has_minimum_role('member')
     user_credits = 0
     if is_member:
         try:
@@ -666,7 +558,7 @@ def daily_scheduler_view(request):
         "is_member": is_member,
         "max_credits": user_credits,
     }
-    return render(request, "mobile/daily_scheduler.html", context)
+    return render(request, "main/daily_scheduler.html", context)
 
 
 # ------------------------------------------
@@ -676,9 +568,16 @@ def daily_scheduler_view(request):
 @role_required("operator")
 def operator_dashboard_view(request):
     """
-    Shows pending session requests (status='pending').
-    Operators can approve or reject.
-    If approved, you could create BookedSession or send Payment Link, etc.
+    Operator Dashboard: Provides access to the Operator Console and other operator tools.
+    """
+    return render(request, "operator/dashboard.html")
+
+@login_required
+@role_required("operator")
+def operator_console_view(request):
+    """
+    Shows pending session requests. Operators can approve or reject.
+    If approved, sends payment link; if rejected, sends rejection email.
     """
     pending_requests = PendingSessionRequest.objects.filter(status='pending').order_by('-created_at')
 
@@ -690,7 +589,6 @@ def operator_dashboard_view(request):
         if request_id and action:
             try:
                 pending_req = PendingSessionRequest.objects.get(id=request_id)
-
                 if action == "accept":
                     pending_req.status = "approved"
                     pending_req.save()
@@ -701,40 +599,45 @@ def operator_dashboard_view(request):
                     pending_req.save()
                     send_rejection_email(pending_req, suggested_times)
                     messages.success(request, "Request rejected and client notified.")
-
             except PendingSessionRequest.DoesNotExist:
-                messages.error(request, "The request could not be found.")
+                messages.error(request, "Request could not be found.")
             except Exception as e:
-                print(f"Error processing the request: {e}")
+                print(f"Error processing request: {e}")
                 messages.error(request, "Error processing the request. Please try again.")
 
-        return redirect('operator_dashboard')
+        return redirect('operator_console')
 
     context = {'pending_requests': pending_requests}
-    return render(request, 'mobile/operator_dashboard.html', context)
+    return render(request, 'operator/console.html', context)
 
 
 # ------------------------------------------
-# STRIPE WEBHOOKS & PAYMENT SUCCESS
+# Payment Success
 # ------------------------------------------
 def payment_success(request):
     messages.success(request, "Your payment has been successfully completed!")
     return redirect("home")
 
+
 # ------------------------------------------
 # INVITES & REGISTRATION
 # ------------------------------------------
+@login_required
 def create_invite_view(request):
     """
     Allows staff to create an Invite for a new user (member/operator).
     """
+    from django.utils.crypto import get_random_string
+
+    if request.user.profile.role != "admin":
+        return HttpResponseForbidden("You are not authorized to access this page.")
+
     if request.method == 'POST':
         email = request.POST.get('email')
         role = request.POST.get('role')
 
         existing_invite = Invite.objects.filter(email=email).first()
         if existing_invite:
-            # If it already exists but expired, refresh it
             if existing_invite.expires_at < now():
                 existing_invite.token = get_random_string(length=64)
                 existing_invite.role = role
@@ -746,47 +649,22 @@ def create_invite_view(request):
                 messages.error(request, f"An active invite already exists for {email}.")
             return redirect('create_invite')
 
-        # Create a fresh invite
+        # Create a new invite
         token = get_random_string(length=64)
         invite = Invite.objects.create(email=email, role=role, token=token)
-        registration_link = f"{settings.BASE_URL}/register/{invite.token}/"
 
-        email_subject = "You’re Invited to Join AVEC Studios"
-        email_body = f"""
-        <div style="font-family:Arial, sans-serif; font-size:16px; color:#333; line-height:1.5; margin:0 auto; max-width:600px; padding:20px;">
-            <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">You’re Invited to Join AVEC Studios</h2>
-            <p>Hi,</p>
-            <p>You have been invited to join AVEC Studios as a {role}. Click below to complete your registration:</p>
-            <div style="text-align:center; margin:30px 0;">
-                <a href="{registration_link}"
-                   style="background-color:#000; color:#fff; text-decoration:none; padding:15px 25px; border-radius:5px; font-size:18px; font-weight:bold;">
-                    Register Now
-                </a>
-            </div>
-            <p>This link expires on {invite.expires_at.strftime('%Y-%m-%d %H:%M:%S')}.</p>
-            <p>If you didn’t expect this email, you can ignore it.</p>
-            <p>Regards,<br>AVEC Studios Team</p>
-        </div>
-        """
-
-        send_mail(
-            subject=email_subject,
-            message="You've been invited to join AVEC Studios. Use the link to register.",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[email],
-            html_message=email_body,
-        )
+        # Instead of building the email inline, call our new function
+        send_invite_email(invite=invite, role=role)
 
         messages.success(request, f"Invite sent to {email}!")
         return redirect('create_invite')
 
-    return render(request, 'admin/create_invite.html')
-
+    return render(request, 'credential/create_invite.html')
 
 def register_view(request, token):
     """
     A user clicks an invite link to register.
-    We validate the token, create a new User with the specified role.
+    Validates token, creates new User with the specified role.
     """
     invite = get_object_or_404(Invite, token=token)
 
@@ -807,30 +685,25 @@ def register_view(request, token):
         login(request, user)
         return redirect("home")
 
-    return render(request, "mobile/register.html", {"invite": invite})
+    return render(request, "credential/register.html", {"invite": invite})
 
 
 # ------------------------------------------
-# ADMIN DASHBOARD (EXAMPLE)
+# ADMIN DASHBOARD
 # ------------------------------------------
-from django.urls import reverse
-
 @login_required
 def admin_dashboard(request):
     """
-    Admin dashboard with profile management, invite creation, and backend access.
+    Admin dashboard for 'admin' role.
     """
-    # Restrict access to admin role
     if request.user.profile.role != "admin":
         return HttpResponseForbidden("You are not authorized to access this page.")
 
-    # Handle POST request for profile updates
     if request.method == "POST":
         user_profile = request.user.profile
         user_profile.phone = request.POST.get("phone", user_profile.phone)
         user_profile.save()
 
-        # Update Django's User model
         user = request.user
         user.first_name = request.POST.get("first_name", user.first_name)
         user.last_name = request.POST.get("last_name", user.last_name)
@@ -840,22 +713,18 @@ def admin_dashboard(request):
         messages.success(request, "Your profile has been updated.")
         return redirect('admin_dashboard')
 
-    # Check membership status
     try:
         membership = request.user.usermembership
         membership_status = "Paid" if membership.active else "Unpaid"
     except UserMembership.DoesNotExist:
         membership_status = "Unpaid"
 
-    # Provide a URL for creating invites
-    create_invite_url = reverse("create_invite")
-
-    # Retrieve ADMIN_URL from the environment
     admin_url = settings.ADMIN_URL
+    create_invite_url = reverse("create_invite")
 
     context = {
         'membership_status': membership_status,
         'create_invite_url': create_invite_url,
-        'admin_url': admin_url,  # Pass admin URL to the template
+        'admin_url': admin_url,
     }
     return render(request, 'admin/dashboard.html', context)

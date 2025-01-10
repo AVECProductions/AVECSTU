@@ -1,147 +1,169 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reservation Request</title>
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background-color: #000;
-            color: #ccc;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
+{% extends "base.html" %}
 
-        .back-icon {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            font-size: 24px;
-            color: #ccc;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            cursor: pointer;
-        }
+{% block title %}Reservation Request{% endblock %}
 
-        .back-icon:hover {
-            color: #fff;
-        }
+{% block extra_styles %}
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: calc(100% - 40px); /* Adjust for the header height */
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+    }
 
+    .back-button {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        font-size: 18px;
+        color: #ccc;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+    }
+
+    .back-button:hover {
+        color: #fff;
+    }
+
+    .form-container {
+        background-color: #111;
+        border: 1px solid #444;
+        padding: 20px;
+        width: 90%;
+        max-width: 450px;
+        min-width: 350px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        margin-top: 5%; /* Add some spacing from the top */
+    }
+
+    .form-container h2 {
+        text-align: center;
+        font-size: 24px;
+        color: #fff;
+        margin-bottom: 20px;
+    }
+
+    .reservation-details {
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 16px;
+    }
+
+    .reservation-details span {
+        font-weight: bold;
+        color: #fff;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    label {
+        display: block;
+        font-size: 14px;
+        margin-bottom: 5px;
+        color: #ddd;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="tel"],
+    textarea,
+    select {
+        width: 100%;
+        padding: 10px;
+        font-size: 14px;
+        background-color: #222;
+        border: 1px solid #555;
+        color: #ccc;
+        border-radius: 5px;
+        box-sizing: border-box;
+    }
+
+    textarea {
+        height: 80px;
+        resize: none;
+    }
+
+    button {
+        display: block;
+        width: 100%;
+        padding: 12px;
+        font-size: 16px;
+        color: #fff;
+        background-color: #444;
+        border: none;
+        cursor: pointer;
+        border-radius: 5px;
+        text-align: center;
+        font-weight: bold;
+        margin-top: 10px;
+    }
+
+    button:hover {
+        background-color: #333;
+    }
+
+    @media (max-width: 768px) {
         .form-container {
-            border: 1px solid #fff;
-            background-color: #111;
-            padding: 20px;
-            width: 400px;
-            box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            width: 100%;
         }
 
         .form-container h2 {
-            text-align: center;
-            margin-bottom: 10px;
+            font-size: 20px;
         }
+    }
+</style>
+{% endblock %}
 
-        .reservation-details {
-            text-align: center;
-            margin-bottom: 20px;
-        }
+{% block content %}
+<!-- Back Button -->
+<a href="/daily-scheduler/" class="back-button" title="Back to Scheduler">&#8592; Back</a>
 
-        .reservation-details span {
-            font-weight: bold;
-            color: #fff;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            font-size: 14px;
-            margin-bottom: 5px;
-        }
-
-        input[type="text"],
-        input[type="email"],
-        input[type="tel"],
-        textarea,
-        select {
-            width: 100%;
-            padding: 10px; /* Uniform padding: applies to top, right, bottom, and left */
-            font-size: 14px;
-            background-color: #222;
-            border: 1px solid #555;
-            color: #ccc;
-            box-sizing: border-box; /* Ensures padding doesn't affect the element's width */
-        }
-
-        textarea {
-            height: 80px;
-            resize: none;
-        }
-
-        button {
-            display: block;
-            width: 100%;
-            padding: 10px;
-            font-size: 16px;
-            color: #fff;
-            background-color: #444;
-            border: none;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background-color: #333;
-        }
-    </style>
-</head>
-<body>
-    <!-- Back Icon -->
-    <a href="/week-scheduler/" class="back-icon" title="Back to Scheduler">
-        &#8592;
-    </a>
-
-    <!-- Form Container -->
-    <div class="form-container">
-        <h2>Request a Reservation</h2>
-        <div class="reservation-details">
-            <p>You are requesting the studio for <span>{{ formatted_date_time }}</span>.</p>
-        </div>
-        <form method="POST">
-            {% csrf_token %}
-            <div class="form-group">
-                <label for="name">Name:</label>
-                <input type="text" id="name" name="name" placeholder="Enter your full name" required>
-            </div>
-            <div class="form-group">
-                <label for="email">Email:</label>
-                <input type="email" id="email" name="email" placeholder="Enter your email" required>
-            </div>
-            <div class="form-group">
-                <label for="phone">Phone Number:</label>
-                <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" required>
-            </div>
-            <div class="form-group">
-                <label for="hours">How many hours would you like to book?</label>
-                <select id="hours" name="hours" required>
-                    <option value="1">1 Hour</option>
-                    <option value="2">2 Hours</option>
-                    <option value="3">3 Hours</option>
-                    <option value="4">4 Hours</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="notes">Notes:</label>
-                <textarea id="notes" name="notes" placeholder="Add any special instructions"></textarea>
-            </div>
-            <button type="submit">Submit Reservation</button>
-        </form>
+<!-- Form Container -->
+<div class="form-container">
+    <h2>Request a Reservation</h2>
+    <div class="reservation-details">
+        <p>You are requesting the studio for <span>{{ formatted_date_time }}</span>.</p>
     </div>
-</body>
-</html>
+    <form method="POST">
+        {% csrf_token %}
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" placeholder="Enter your full name" required>
+        </div>
+        <div class="form-group">
+            <label for="email">Email:</label>
+            <input type="email" id="email" name="email" placeholder="Enter your email" required>
+        </div>
+        <div class="form-group">
+            <label for="phone">Phone Number:</label>
+            <input type="tel" id="phone" name="phone" placeholder="Enter your phone number" required>
+        </div>
+        <div class="form-group">
+            <label for="hours">How many hours would you like to book?</label>
+            <select id="hours" name="hours" required>
+                <option value="1">1 Hour</option>
+                <option value="2">2 Hours</option>
+                <option value="3">3 Hours</option>
+                <option value="4">4 Hours</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="notes">Notes:</label>
+            <textarea id="notes" name="notes" placeholder="Add any special instructions"></textarea>
+        </div>
+        <button type="submit">Submit Request</button>
+    </form>
+</div>
+{% endblock %}
