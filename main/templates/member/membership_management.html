@@ -66,9 +66,13 @@
         Membership Status: {{ membership_status }}
     </div>
     <div class="membership-details">
-        {% if membership_status == "Paid" %}
+        {% if "Paid" in membership_status %}
             <p>Plan: {{ membership_plan }}</p>
+            <p>Credits: {{ credits }}</p>
             <p>Next Billing Date: {{ next_billing_date }}</p>
+            <p>Valid Until: {{ valid_until }}</p>
+        {% elif membership_status == "Unpaid" %}
+            <p>Your membership is currently inactive.</p>
         {% endif %}
     </div>
     {% if membership_status == "Unpaid" %}
@@ -78,6 +82,7 @@
         <button onclick="location.href='/cancel-membership/'">Cancel Membership</button>
     {% endif %}
 </div>
+
 <script>
     function showLoading() {
         alert("Processing your request...");

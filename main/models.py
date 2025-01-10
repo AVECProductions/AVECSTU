@@ -120,15 +120,18 @@ class UserMembership(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     plan = models.ForeignKey(MembershipPlan, on_delete=models.SET_NULL, null=True)
     start_date = models.DateField(auto_now_add=True)
-    end_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)  # Set on explicit end (optional)
     active = models.BooleanField(default=False)
     stripe_subscription_id = models.CharField(max_length=100, unique=True, null=True)
 
     credits = models.PositiveIntegerField(default=0)
+    next_billing_date = models.DateField(null=True, blank=True)  # Next payment due date
+    valid_until = models.DateField(null=True, blank=True)  # Membership valid until this date
 
     def __str__(self):
         plan_name = self.plan.name if self.plan else 'No Plan'
         return f"{self.user.username} - {plan_name}"
+
 
 
 # ----------------------------------------------------------------------------------

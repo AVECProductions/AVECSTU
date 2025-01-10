@@ -27,6 +27,7 @@ from .forms import ProfileUpdateForm
 # Services & Emails
 from .services import (
     cancel_stripe_subscription,
+    has_membership_access
 )
 from .emails import (
     send_rejection_email,
@@ -183,6 +184,8 @@ def member_profile(request):
     return render(request, "member/profile.html", context)
 
 
+from datetime import date
+
 @login_required
 def membership_management_view(request):
     """
@@ -190,14 +193,31 @@ def membership_management_view(request):
     """
     try:
         membership = request.user.usermembership
-        membership_status = "Paid" if membership.active else "Unpaid"
-    except UserMembership.DoesNotExist:
-        membership_status = "Unpaid"
 
-    context = {
-        "membership_status": membership_status,
-    }
+        # Determine membership status based on active and valid_until
+        if membership.valid_until and membership.valid_until >= date.today():
+            membership_status = f"Paid - Valid until {membership.valid_until}"
+        else:
+            membership_status = "Unpaid"
+
+        context = {
+            "membership_status": membership_status,
+            "membership_plan": membership.plan.name if membership.plan else "No Plan",
+            "credits": membership.credits,
+            "next_billing_date": membership.next_billing_date,
+            "valid_until": membership.valid_until,
+        }
+    except UserMembership.DoesNotExist:
+        context = {
+            "membership_status": "Unpaid",
+            "membership_plan": None,
+            "credits": 0,
+            "next_billing_date": None,
+            "valid_until": None,
+        }
+
     return render(request, "member/membership_management.html", context)
+
 
 
 @login_required
@@ -454,7 +474,8 @@ def daily_scheduler_view(request):
                 except UserMembership.DoesNotExist:
                     membership = None
 
-                if membership and membership.active and membership.credits >= len(hours_list):
+                active_member = has_membership_access(request.user)
+                if membership and active_member and membership.credits >= len(hours_list):
                     # Book each selected hour
                     for hour in hours_list:
                         booked_start_time = datetime.strptime(f"{hour}:00", "%H:%M").time()

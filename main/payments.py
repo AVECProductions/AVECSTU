@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth.models import User
 import stripe
+from datetime import date
 
 from .emails import (
     send_payment_failure_email,
@@ -63,8 +64,17 @@ def handle_successful_payment(session):
         user = User.objects.get(id=user_id)
 
         membership, _ = UserMembership.objects.get_or_create(user=user)
+
+        # Update membership details
         membership.active = True
         membership.stripe_subscription_id = session.get('subscription', None)
+
+        # Update the next billing date and valid_until date
+        subscription = stripe.Subscription.retrieve(membership.stripe_subscription_id)
+        next_billing_unix = subscription['current_period_end']
+        next_billing_date = date.fromtimestamp(next_billing_unix)
+        membership.next_billing_date = next_billing_date
+        membership.valid_until = next_billing_date
         membership.save()
 
         # Send confirmation email
@@ -76,6 +86,7 @@ def handle_successful_payment(session):
         print(f"User with ID {session['metadata'].get('user_id')} not found.")
     except Exception as e:
         print(f"Error in handle_successful_payment: {e}")
+
 
 
 def handle_failed_payment(subscription_id):
