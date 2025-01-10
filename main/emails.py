@@ -3,6 +3,7 @@
 from django.conf import settings
 from django.core.mail import EmailMessage
 from django.utils.html import escape
+from django.contrib.auth.models import User
 import stripe  # only if you need it here
 from .models import UserMembership
 
@@ -275,3 +276,72 @@ def notify_operators_of_new_request(name, email, phone, date_str, time_str, hour
     )
     msg.content_subtype = "html"
     msg.send()
+
+def send_reservation_payment_confirmation_email(reservation):
+    """
+    Sends a confirmation email to the user and notifies operators upon successful payment for a session reservation.
+    """
+    try:
+        # Email to the user
+        user_email_content = f"""
+        <div style="font-family: Arial, sans-serif; font-size:16px; color:#333; line-height:1.5; margin:0 auto; max-width:600px; padding:20px;">
+            <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">Reservation Confirmed</h2>
+            <p>Hi {reservation.requester_name},</p>
+            <p>Your reservation has been successfully confirmed. Here are the details of your booking:</p>
+            <ul style="list-style-type:none; padding:0;">
+                <li><strong>Date:</strong> {reservation.requested_date.strftime("%b %d, %Y")}</li>
+                <li><strong>Time:</strong> {reservation.requested_time.strftime("%I:%M %p")}</li>
+                <li><strong>Hours:</strong> {reservation.hours} hour(s)</li>
+            </ul>
+            <p>If you have any questions or need assistance, feel free to contact us.</p>
+            <p>Thank you,<br>AVEC Studios</p>
+        </div>
+        """
+
+        user_msg = EmailMessage(
+            subject="Reservation Confirmed",
+            body=user_email_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[reservation.requester_email],
+        )
+        user_msg.content_subtype = "html"
+        user_msg.send()
+
+        # Email to the operators
+        operators = User.objects.filter(groups__name="Operator")
+        operator_emails = [op.email for op in operators if op.email]
+
+        operator_email_content = f"""
+        <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.5; max-width: 600px; margin: auto;">
+            <h2 style="color: #000;">Reservation Confirmed</h2>
+            <p>A new reservation has been successfully confirmed:</p>
+            <ul style="padding-left: 20px; color: #555;">
+                <li><strong>Name:</strong> {reservation.requester_name}</li>
+                <li><strong>Email:</strong> {reservation.requester_email}</li>
+                <li><strong>Date:</strong> {reservation.requested_date.strftime("%b %d, %Y")}</li>
+                <li><strong>Time:</strong> {reservation.requested_time.strftime("%I:%M %p")}</li>
+                <li><strong>Hours:</strong> {reservation.hours} hour(s)</li>
+            </ul>
+            <p>Click below to review this reservation in the Operator Dashboard:</p>
+            <div style="text-align: center; margin: 20px 0;">
+                <a href="{settings.BASE_URL}/operator-dashboard/"
+                   style="background-color: #007bff; color: #fff; text-decoration: none; 
+                          padding: 10px 20px; border-radius: 5px; font-size: 16px;">
+                    View Operator Dashboard
+                </a>
+            </div>
+            <p style="color: #777;">AVEC Studios</p>
+        </div>
+        """
+
+        operator_msg = EmailMessage(
+            subject="Reservation Confirmed",
+            body=operator_email_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=operator_emails,
+        )
+        operator_msg.content_subtype = "html"
+        operator_msg.send()
+
+    except Exception as e:
+        print(f"Failed to send reservation confirmation email: {e}")
