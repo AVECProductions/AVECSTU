@@ -36,12 +36,15 @@ def stripe_webhook(request):
         session = event['data']['object']
 
         # Determine if this is a subscription or a single session
-        if 'subscription' in session:
+        if session.get('subscription'):
             # Handle subscription payment
             handle_successful_payment(session)
-        elif 'metadata' in session and 'reservation_id' in session['metadata']:
+        elif session.get('metadata') and 'reservation_id' in session['metadata']:
             # Handle single session reservation
             handle_reservation_payment(session)
+        else:
+            # Log unrecognized session type for debugging
+            print(f"Unrecognized session type: {session}")
 
     elif event['type'] == 'invoice.payment_failed':
         subscription_id = event['data']['object'].get('subscription')

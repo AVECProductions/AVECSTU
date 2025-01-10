@@ -84,7 +84,7 @@ def send_cancelation_confirmation_email(user):
 
 def send_payment_email_stripe(pending_req):
     """
-    Sends a Stripe payment link to the user after operator approval.
+    Sends a Stripe Checkout session link to the user after operator approval.
     """
     try:
         import stripe
@@ -93,22 +93,25 @@ def send_payment_email_stripe(pending_req):
         amount = 1.00  # Example $1
         unit_amount = int(amount * 100)
 
-        price = stripe.Price.create(
-            unit_amount=unit_amount,
-            currency="usd",
-            product_data={"name": "Studio Booking Fee"},
-        )
-
-        payment_link = stripe.PaymentLink.create(
-            line_items=[{"price": price.id, "quantity": 1}],
+        # Create a Checkout Session for one-time payment
+        checkout_session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            after_completion={
-                "type": "redirect",
-                "redirect": {"url": f"{settings.BASE_URL}/payment-success/"}
-            },
+            mode="payment",  # Use "payment" for one-time payments
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "product_data": {"name": "Studio Booking Fee"},
+                        "unit_amount": unit_amount,
+                    },
+                    "quantity": 1,
+                }
+            ],
             metadata={
-                "reservation_id": pending_req.id
+                "reservation_id": pending_req.id,
             },
+            success_url=f"{settings.BASE_URL}/payment-success/",
+            cancel_url=f"{settings.BASE_URL}/payment-cancelled/",
         )
 
         email_content = f"""
@@ -124,7 +127,7 @@ def send_payment_email_stripe(pending_req):
             </ul>
             <p style="margin-top:20px;">To confirm your reservation, please complete the payment by clicking below:</p>
             <div style="text-align:center; margin:30px 0;">
-                <a href="{payment_link.url}"
+                <a href="{checkout_session.url}"
                    style="background-color:#000; color:#fff; text-decoration:none; padding:15px 25px; border-radius:5px; font-size:18px; font-weight:bold;">
                     Complete Payment
                 </a>
@@ -146,7 +149,6 @@ def send_payment_email_stripe(pending_req):
     except Exception as e:
         print(f"Failed to send Stripe payment email: {e}")
         raise
-
 
 def send_rejection_email(pending_req, suggested_times):
     """
