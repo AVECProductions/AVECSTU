@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Membership Management{% endblock %}
+
+{% block extra_styles %}
+<style>
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: calc(100% - 40px);
+        font-family: Arial, sans-serif;
+        background-color: #000;
+        color: #ccc;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .dashboard-container {
+        border: 1px solid #111;
+        background-color: #111;
+        padding: 20px;
+        width: 90%;
+        max-width: 400px;
+        min-width: 300px;
+        box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .dashboard-container h2 {
+        margin-bottom: 20px;
+        font-size: 24px;
+        color: #fff;
+    }
+
+    .membership-status, .membership-details {
+        margin: 20px 0;
+        font-size: 16px;
+        font-weight: bold;
+    }
+
+    button {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        font-size: 16px;
+        color: #fff;
+        background-color: #444;
+        border: none;
+        cursor: pointer;
+        border-radius: 4px;
+        margin-top: 10px;
+    }
+
+    button:hover {
+        background-color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-container">
+    <h2>Membership Management</h2>
+    <div class="membership-status">
+        Membership Status: {{ membership_status }}
+    </div>
+    <div class="membership-details">
+        {% if membership_status == "Paid" %}
+            <p>Plan: {{ membership_plan }}</p>
+            <p>Next Billing Date: {{ next_billing_date }}</p>
+        {% endif %}
+    </div>
+    {% if membership_status == "Unpaid" %}
+        <button onclick="location.href='/pay-membership/'">Pay Membership</button>
+        <button onclick="location.href='/update-payment-method/'">Update Payment Method</button>
+    {% else %}
+        <button onclick="location.href='/cancel-membership/'">Cancel Membership</button>
+    {% endif %}
+</div>
+<script>
+    function showLoading() {
+        alert("Processing your request...");
+    }
+</script>
+{% endblock %}

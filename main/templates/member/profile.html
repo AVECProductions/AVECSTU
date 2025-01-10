@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 
-{% block title %}Member Dashboard{% endblock %}
+{% block title %}Update Profile{% endblock %}
 
 {% block extra_styles %}
 <style>
-    body {
+    html, body {
         margin: 0;
+        padding: 0;
+        height: calc(100% - 40px); /* Adjust for header height */
         font-family: Arial, sans-serif;
         background-color: #000;
         color: #ccc;
         display: flex;
         justify-content: center;
         align-items: center;
-        height: calc(100% - 40px);
     }
 
     .dashboard-container {
@@ -24,11 +25,14 @@
         min-width: 300px;
         box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
         border-radius: 8px;
+        text-align: center;
     }
 
     .dashboard-container h2 {
         text-align: center;
         margin-bottom: 20px;
+        font-size: 24px;
+        color: #fff;
     }
 
     .form-group {
@@ -39,6 +43,8 @@
         display: block;
         font-size: 14px;
         margin-bottom: 5px;
+        text-align: left;
+        color: #ccc;
     }
 
     input[type="text"],
@@ -52,13 +58,6 @@
         color: #ccc;
         box-sizing: border-box;
         border-radius: 4px;
-    }
-
-    .membership-status {
-        text-align: center;
-        margin: 20px 0;
-        font-size: 16px;
-        font-weight: bold;
     }
 
     button {
@@ -82,7 +81,7 @@
 
 {% block content %}
 <div class="dashboard-container">
-    <h2>Member Dashboard</h2>
+    <h2>Update Profile</h2>
     <form method="POST">
         {% csrf_token %}
         <div class="form-group">
@@ -103,14 +102,5 @@
         </div>
         <button type="submit">Update Profile</button>
     </form>
-    <div class="membership-status">Membership Status: {{ membership_status }}</div>
-    {% if membership_status == "Unpaid" %}
-        <button onclick="location.href='/pay-membership/'">Pay Membership</button>
-    {% else %}
-        <button onclick="location.href='/cancel-membership/'">Cancel Membership</button>
-    {% endif %}
-
-    <!-- Manage Sessions Button -->
-    <button onclick="location.href='{% url 'session_manager' %}'">Manage Sessions</button>
 </div>
 {% endblock %}

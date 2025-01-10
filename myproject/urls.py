@@ -3,6 +3,7 @@ from django.urls import path
 from main.views import *
 from decouple import config
 from django.contrib.auth import views as auth_views
+from main.payments import stripe_webhook
 
 urlpatterns = [
     path(config('ADMIN_URL'), admin.site.urls),
@@ -23,4 +24,6 @@ urlpatterns = [
     path("pay-membership/", pay_membership, name="pay_membership"),
     path("cancel-membership/", cancel_membership, name="cancel_membership"),
     path('session-manager/', session_manager_view, name='session_manager'),
+    path('member-profile/', member_profile, name='member_profile'),
+    path("membership-management/", membership_management_view, name="membership_management"),
 ]

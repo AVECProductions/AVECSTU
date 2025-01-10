@@ -5,11 +5,11 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse, HttpResponseForbidden
 from django.utils.timezone import localtime, now, timedelta
-from django.utils.html import escape
 from django.utils.crypto import get_random_string
 from django.conf import settings
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
+from .payments import send_rejection_email, send_payment_email_stripe, send_cancelation_confirmation_email
 
 import stripe
 import calendar
@@ -55,6 +55,17 @@ def role_required(role):
 @login_required
 def member_dashboard_view(request):
     """
+    Display the Member Dashboard with options to Update Profile,
+    Manage Membership, and access the Session Manager.
+    """
+    context = {
+        "current_time": now(),
+    }
+    return render(request, "member/dashboard.html", context)
+
+@login_required
+def member_profile(request):
+    """
     Display the member's profile information and allow edits.
     Restricts access for 'public' users.
     """
@@ -78,7 +89,7 @@ def member_dashboard_view(request):
         user.save()
 
         messages.success(request, "Your profile has been updated.")
-        return redirect('member_dashboard')
+        return redirect("member_profile")
 
     # Check membership
     try:
@@ -90,43 +101,170 @@ def member_dashboard_view(request):
     context = {
         'membership_status': membership_status,
     }
-    return render(request, 'mobile/member_dashboard.html', context)
+    return render(request, "member/profile.html", context)
 
+@login_required
+def membership_management_view(request):
+    """
+    Allows members to view and manage their membership status.
+    """
+    # Retrieve the user's membership status
+    try:
+        membership = request.user.usermembership
+        membership_status = "Paid" if membership.active else "Unpaid"
+    except UserMembership.DoesNotExist:
+        membership_status = "Unpaid"
+
+    context = {
+        "membership_status": membership_status,
+    }
+    return render(request, "member/membership_management.html", context)
+
+@login_required
+def session_manager_view(request):
+    """
+    Allows members to manage their booked sessions.
+    They can view and cancel their own bookings.
+    """
+    user = request.user
+
+    # Get the current time
+    current_time = now()
+
+    # Combine booked_date and booked_start_time into a datetime for comparison
+    booked_sessions = BookedSession.objects.filter(
+        booked_by=user,
+        status='booked',
+        booked_datetime__gte=now()
+    ).order_by('booked_datetime')
+
+    if request.method == "POST":
+        session_id = request.POST.get('session_id')
+
+        if session_id:
+            try:
+                booked_session = BookedSession.objects.get(id=session_id, booked_by=user)
+                booked_session.status = "canceled"  # Mark the session as canceled
+                booked_session.save()
+                messages.success(request, "Session successfully canceled.")
+            except BookedSession.DoesNotExist:
+                messages.error(request, "Session could not be found.")
+            except Exception as e:
+                print(f"Error canceling the session: {e}")
+                messages.error(request, "An error occurred while canceling the session.")
+
+        return redirect('session_manager')
+
+    context = {'booked_sessions': booked_sessions}
+    return render(request, 'member/session_manager.html', context)
+
+# ------------------------------------------
+# Membership management
+# ------------------------------------------
 
 @login_required
 def pay_membership(request):
     """
-    Stub to mark membership as paid/active.
+    Redirects the user to Stripe Checkout for membership payment.
     """
     user = request.user
+
+    # Stripe price ID for the membership (replace with your actual price ID)
+    stripe_price_id = "price_1Qaizu08vvVeCKwuAKr9zXca"
+
     try:
-        membership = user.usermembership
-    except UserMembership.DoesNotExist:
-        # Create a membership if doesn't exist
-        membership = UserMembership.objects.create(user=user, active=False)
+        # Create a Stripe Checkout session
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            mode='subscription',
+            line_items=[
+                {
+                    'price': stripe_price_id,
+                    'quantity': 1,
+                },
+            ],
+            metadata={
+                'user_id': user.id,  # Include user information for webhook handling
+            },
+            success_url=request.build_absolute_uri('/membership-management/'),
+            cancel_url=request.build_absolute_uri('/membership-management/'),
+        )
 
-    membership.active = True
-    membership.save()
+        # Redirect to Stripe Checkout
+        return redirect(checkout_session.url, code=303)
 
-    messages.success(request, "Membership paid successfully.")
-    return redirect('member_dashboard')
+    except Exception as e:
+        messages.error(request, f"An error occurred: {str(e)}")
+        print("error")
+        return redirect("membership_management")
 
-
-@login_required
 def cancel_membership(request):
     """
-    Stub to mark membership as canceled/inactive.
+    Cancels the user's membership and the associated Stripe subscription.
     """
     user = request.user
-    try:
-        membership = user.usermembership
-        membership.active = False
-        membership.save()
-        messages.success(request, "Membership canceled successfully.")
-    except UserMembership.DoesNotExist:
-        messages.error(request, "You do not have an active membership to cancel.")
 
-    return redirect('member_dashboard')
+    try:
+        # Retrieve the user's membership
+        membership = user.usermembership
+
+        # Check if the membership is active
+        if membership.active and membership.stripe_subscription_id:
+            # Cancel the subscription on Stripe
+            success = cancel_stripe_subscription(user)
+            if success:
+                # Update membership status in the database
+                membership.active = False
+                membership.stripe_subscription_id = None
+                membership.save()
+
+                # Optionally send a cancellation confirmation email
+                send_cancelation_confirmation_email(user)
+
+                messages.success(request, "Your membership has been successfully canceled.")
+            else:
+                messages.error(request, "There was an issue canceling your membership. Please try again.")
+        else:
+            messages.error(request, "You do not have an active membership to cancel.")
+
+    except UserMembership.DoesNotExist:
+        messages.error(request, "You do not have a membership to cancel.")
+
+    return redirect("membership_management")
+
+def cancel_stripe_subscription(user):
+    """
+    Cancels the user's Stripe subscription.
+    Args:
+        user: The user whose subscription needs to be canceled.
+
+    Returns:
+        bool: True if the subscription was successfully canceled, False otherwise.
+    """
+    try:
+        # Get the user's membership
+        membership = UserMembership.objects.get(user=user)
+
+        # Check if the membership has an active Stripe subscription
+        if membership.stripe_subscription_id:
+            # Use Stripe API to delete the subscription
+            stripe.Subscription.delete(membership.stripe_subscription_id)
+
+            # Update the membership status
+            membership.active = False
+            membership.stripe_subscription_id = None
+            membership.save()
+
+            return True  # Cancellation was successful
+        else:
+            return False  # No active subscription to cancel
+    except UserMembership.DoesNotExist:
+        print(f"Membership does not exist for user {user.username}.")
+        return False
+    except stripe.error.StripeError as e:
+        print(f"Stripe error during subscription cancellation: {e}")
+        return False
+
 
 
 # ------------------------------------------
@@ -431,7 +569,10 @@ def daily_scheduler_view(request):
         return redirect(f"/daily-scheduler/?date={selected_date.isoformat()}")
 
     # 1) Gather booked sessions for this date
-    booked_sessions = BookedSession.objects.filter(booked_date=selected_date)
+    booked_sessions = BookedSession.objects.filter(
+        booked_date=selected_date,
+        status__in=["booked", "paid"]  # Include only these statuses
+    )
 
     # We'll map hour -> (status, booked_by_name)
     booked_map = {}
@@ -572,167 +713,6 @@ def operator_dashboard_view(request):
     context = {'pending_requests': pending_requests}
     return render(request, 'mobile/operator_dashboard.html', context)
 
-# ------------------------------------------
-# SESSION MANAGER (ability for members to cancel bookings)
-# ------------------------------------------
-
-@login_required
-def session_manager_view(request):
-    """
-    Allows members to manage their booked sessions.
-    They can view and cancel their own bookings.
-    """
-    user = request.user
-
-    # Get the current time
-    current_time = now()
-
-    # Combine booked_date and booked_start_time into a datetime for comparison
-    booked_sessions = BookedSession.objects.filter(
-        booked_by=user,
-        status='booked',
-        booked_datetime__gte=now()
-    ).order_by('booked_datetime')
-
-    if request.method == "POST":
-        session_id = request.POST.get('session_id')
-
-        if session_id:
-            try:
-                booked_session = BookedSession.objects.get(id=session_id, booked_by=user)
-                booked_session.status = "canceled"  # Mark the session as canceled
-                booked_session.save()
-                messages.success(request, "Session successfully canceled.")
-            except BookedSession.DoesNotExist:
-                messages.error(request, "Session could not be found.")
-            except Exception as e:
-                print(f"Error canceling the session: {e}")
-                messages.error(request, "An error occurred while canceling the session.")
-
-        return redirect('session_manager')
-
-    context = {'booked_sessions': booked_sessions}
-    return render(request, 'mobile/session_manager.html', context)
-
-
-# ------------------------------------------
-# EMAIL SENDERS (Stripe Payment Link, Rejection, etc.)
-# ------------------------------------------
-def send_payment_email_stripe(pending_req):
-    """
-    Example flow for sending a payment link to the user
-    once the operator approves the request.
-    """
-    try:
-        # Price example: $1 per entire request. (Adjust as needed.)
-        amount = 1
-        unit_amount = int(amount * 100)
-
-        price = stripe.Price.create(
-            unit_amount=unit_amount,
-            currency="usd",
-            product_data={"name": "Studio Booking Fee"},
-        )
-
-        payment_link = stripe.PaymentLink.create(
-            line_items=[{"price": price.id, "quantity": 1}],
-            payment_method_types=["card"],
-            after_completion={
-                "type": "redirect",
-                "redirect": {"url": f"{settings.BASE_URL}/payment-success/"}
-            },
-            metadata={
-                "reservation_id": pending_req.id  # used in webhook
-            },
-        )
-
-        email_content = f"""
-        <div style="font-family: Arial, sans-serif; font-size:16px; color:#333; line-height:1.5; margin:0 auto; max-width:600px; padding:20px;">
-            <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">Complete Your Studio Reservation</h2>
-            <p>Hi {pending_req.requester_name},</p>
-            <p>Thank you for reserving the studio! Below are your request details:</p>
-            <ul style="list-style-type:none; padding:0;">
-                <li><strong>Date:</strong> {pending_req.requested_date.strftime("%b %d, %Y")}</li>
-                <li><strong>Time:</strong> {pending_req.requested_time.strftime("%I:%M %p")}</li>
-                <li><strong>Hours:</strong> {pending_req.hours} hour(s)</li>
-                <li><strong>Amount Due:</strong> ${amount:.2f}</li>
-            </ul>
-            <p style="margin-top:20px;">To confirm your reservation, please complete the payment by clicking below:</p>
-            <div style="text-align:center; margin:30px 0;">
-                <a href="{payment_link.url}"
-                   style="background-color:#000; color:#fff; text-decoration:none; padding:15px 25px; border-radius:5px; font-size:18px; font-weight:bold;">
-                    Complete Payment
-                </a>
-            </div>
-            <p>If you have any questions, feel free to reply to this email.</p>
-            <p>Thank you,<br>AVEC Studios</p>
-        </div>
-        """
-
-        msg = EmailMessage(
-            subject="Complete Your Payment for Studio Reservation",
-            body=email_content,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[pending_req.requester_email],
-        )
-        msg.content_subtype = "html"
-        msg.send()
-
-    except Exception as e:
-        print(f"Failed to send Stripe payment email: {e}")
-        raise
-
-
-def send_rejection_email(pending_req, suggested_times):
-    """
-    Send a rejection email with optional alternative times.
-    """
-    try:
-        daily_scheduler_link = f"{settings.BASE_URL}/daily-scheduler/?date={pending_req.requested_date.isoformat()}"
-        suggested_html = ""
-        if suggested_times:
-            escaped_times = escape(suggested_times).replace("\n", "<br>")
-            suggested_html = f"""
-            <p>The operator has suggested the following alternative times:</p>
-            <ul><li>{escaped_times}</li></ul>
-            """
-
-        email_content = f"""
-        <div style="font-family:Arial, sans-serif; font-size:16px; color:#333; line-height:1.5; margin:0 auto; max-width:600px; padding:20px;">
-            <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">Reservation Request Declined</h2>
-            <p>Hi {pending_req.requester_name},</p>
-            <p>Unfortunately, your reservation request for:</p>
-            <ul style="list-style-type:none; padding:0;">
-                <li><strong>Date:</strong> {pending_req.requested_date.strftime("%b %d, %Y")}</li>
-                <li><strong>Time:</strong> {pending_req.requested_time.strftime("%I:%M %p")}</li>
-            </ul>
-            <p>has been declined.</p>
-            {suggested_html}
-            <p>You can view and book other available slots here:</p>
-            <div style="text-align:center; margin:30px 0;">
-                <a href="{daily_scheduler_link}"
-                   style="background-color:#000; color:#fff; text-decoration:none; padding:15px 25px; border-radius:5px; font-size:18px; font-weight:bold;">
-                    View Available Times
-                </a>
-            </div>
-            <p>If you have any questions, feel free to reply to this email.</p>
-            <p>Thank you,<br>AVEC Studios</p>
-        </div>
-        """
-
-        msg = EmailMessage(
-            subject="Your Reservation Request Has Been Declined",
-            body=email_content,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[pending_req.requester_email],
-        )
-        msg.content_subtype = "html"
-        msg.send()
-
-    except Exception as e:
-        print(f"Failed to send rejection email: {e}")
-        raise
-
 
 # ------------------------------------------
 # STRIPE WEBHOOKS & PAYMENT SUCCESS
@@ -741,82 +721,82 @@ def payment_success(request):
     messages.success(request, "Your payment has been successfully completed!")
     return redirect("home")
 
-
-@csrf_exempt
-def stripe_webhook(request):
-    """
-    Receives Stripe Webhook events.
-    If a checkout.session.completed event is found, we mark the
-    related PendingSessionRequest as 'paid'.
-    """
-    print("webhook received")
-    payload = request.body
-    sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
-    endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
-
-    try:
-        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
-    except ValueError:
-        return JsonResponse({'error': 'Invalid payload'}, status=400)
-    except stripe.error.SignatureVerificationError:
-        return JsonResponse({'error': 'Invalid signature'}, status=400)
-
-    if event['type'] == 'checkout.session.completed':
-        session = event['data']['object']
-        handle_successful_payment(session)
-
-    return JsonResponse({'status': 'success'})
-
-
-def handle_successful_payment(session):
-    """
-    When the user pays, we mark the corresponding PendingSessionRequest
-    as 'paid'.
-    """
-    try:
-        reservation_id = session['metadata']['reservation_id']
-        pending_req = PendingSessionRequest.objects.get(id=reservation_id)
-        pending_req.status = "paid"
-        pending_req.save()
-
-        send_payment_confirmation_email(pending_req)
-
-    except KeyError:
-        print("No 'reservation_id' in metadata.")
-    except PendingSessionRequest.DoesNotExist:
-        print(f"PendingSessionRequest with ID {reservation_id} not found.")
-
-
-def send_payment_confirmation_email(pending_req):
-    """
-    Emails the user a confirmation after the request is 'paid'.
-    """
-    try:
-        email_content = f"""
-        <div>
-            <h2>Payment Successful</h2>
-            <p>Reservation Details:</p>
-            <ul>
-                <li>Name: {pending_req.requester_name}</li>
-                <li>Date: {pending_req.requested_date}</li>
-                <li>Time: {pending_req.requested_time}</li>
-                <li>Hours: {pending_req.hours}</li>
-            </ul>
-            <p>Thank you for your payment!</p>
-        </div>
-        """
-
-        msg = EmailMessage(
-            subject="Payment Confirmation",
-            body=email_content,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[pending_req.requester_email],
-        )
-        msg.content_subtype = "html"
-        msg.send()
-
-    except Exception as e:
-        print(f"Failed to send payment confirmation email: {e}")
+#
+# @csrf_exempt
+# def stripe_webhook(request):
+#     """
+#     Receives Stripe Webhook events.
+#     If a checkout.session.completed event is found, we mark the
+#     related PendingSessionRequest as 'paid'.
+#     """
+#     print("webhook received")
+#     payload = request.body
+#     sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+#     endpoint_secret = settings.STRIPE_WEBHOOK_SECRET
+#
+#     try:
+#         event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+#     except ValueError:
+#         return JsonResponse({'error': 'Invalid payload'}, status=400)
+#     except stripe.error.SignatureVerificationError:
+#         return JsonResponse({'error': 'Invalid signature'}, status=400)
+#
+#     if event['type'] == 'checkout.session.completed':
+#         session = event['data']['object']
+#         handle_successful_payment(session)
+#
+#     return JsonResponse({'status': 'success'})
+#
+#
+# def handle_successful_payment(session):
+#     """
+#     When the user pays, we mark the corresponding PendingSessionRequest
+#     as 'paid'.
+#     """
+#     try:
+#         reservation_id = session['metadata']['reservation_id']
+#         pending_req = PendingSessionRequest.objects.get(id=reservation_id)
+#         pending_req.status = "paid"
+#         pending_req.save()
+#
+#         send_payment_confirmation_email(pending_req)
+#
+#     except KeyError:
+#         print("No 'reservation_id' in metadata.")
+#     except PendingSessionRequest.DoesNotExist:
+#         print(f"PendingSessionRequest with ID {reservation_id} not found.")
+#
+#
+# def send_payment_confirmation_email(pending_req):
+#     """
+#     Emails the user a confirmation after the request is 'paid'.
+#     """
+#     try:
+#         email_content = f"""
+#         <div>
+#             <h2>Payment Successful</h2>
+#             <p>Reservation Details:</p>
+#             <ul>
+#                 <li>Name: {pending_req.requester_name}</li>
+#                 <li>Date: {pending_req.requested_date}</li>
+#                 <li>Time: {pending_req.requested_time}</li>
+#                 <li>Hours: {pending_req.hours}</li>
+#             </ul>
+#             <p>Thank you for your payment!</p>
+#         </div>
+#         """
+#
+#         msg = EmailMessage(
+#             subject="Payment Confirmation",
+#             body=email_content,
+#             from_email=settings.DEFAULT_FROM_EMAIL,
+#             to=[pending_req.requester_email],
+#         )
+#         msg.content_subtype = "html"
+#         msg.send()
+#
+#     except Exception as e:
+#         print(f"Failed to send payment confirmation email: {e}")
 
 
 # ------------------------------------------

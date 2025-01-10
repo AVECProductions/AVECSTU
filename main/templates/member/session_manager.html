@@ -111,7 +111,6 @@
             <p><strong>Date:</strong> {{ session.booked_date }}</p>
             <p><strong>Time:</strong> {{ session.booked_start_time }}</p>
             <p><strong>Duration:</strong> {{ session.duration_hours }} hour(s)</p>
-            <p><strong>Status:</strong> {{ session.status }}</p>
         </div>
         {% if session.status != "canceled" %}
         <div class="actions">
