@@ -11,7 +11,7 @@ from .emails import (
     send_payment_failure_email,
     send_membership_confirmation_email,
 )
-from .models import UserMembership
+from .models import UserMembership, MembershipPlan
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -61,31 +61,42 @@ def handle_successful_payment(session):
     """
     try:
         user_id = session['metadata']['user_id']
+        plan_id = session['metadata']['plan_id']  # Retrieve the plan ID from metadata
         user = User.objects.get(id=user_id)
+        plan = MembershipPlan.objects.get(id=plan_id)  # Get the membership plan
 
-        membership, _ = UserMembership.objects.get_or_create(user=user)
+        # Get or create the user's membership
+        membership, created = UserMembership.objects.get_or_create(user=user)
 
         # Update membership details
         membership.active = True
+        membership.plan = plan  # Assign the membership plan
         membership.stripe_subscription_id = session.get('subscription', None)
 
-        # Update the next billing date and valid_until date
+        # Retrieve subscription details from Stripe
         subscription = stripe.Subscription.retrieve(membership.stripe_subscription_id)
         next_billing_unix = subscription['current_period_end']
         next_billing_date = date.fromtimestamp(next_billing_unix)
+
+        # Set billing dates and default credits
         membership.next_billing_date = next_billing_date
         membership.valid_until = next_billing_date
+        if created or membership.credits == 0:  # Assign 100 credits only if newly created or credits are 0
+            membership.credits = 100
         membership.save()
 
         # Send confirmation email
         send_membership_confirmation_email(user)
 
     except KeyError:
-        print("No 'user_id' in checkout.session.metadata.")
+        print("No 'user_id' or 'plan_id' in checkout.session.metadata.")
     except User.DoesNotExist:
         print(f"User with ID {session['metadata'].get('user_id')} not found.")
+    except MembershipPlan.DoesNotExist:
+        print(f"Membership plan with ID {session['metadata'].get('plan_id')} not found.")
     except Exception as e:
         print(f"Error in handle_successful_payment: {e}")
+
 
 
 

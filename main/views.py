@@ -21,6 +21,7 @@ from .models import (
     Invite,
     UserMembership,
     UserProfile,
+    MembershipPlan
 )
 from .forms import ProfileUpdateForm
 
@@ -267,16 +268,29 @@ def pay_membership(request):
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
     try:
+        # Retrieve the membership plan
+        plan = MembershipPlan.objects.get(stripe_price_id=stripe_price_id)
+
+        # Create a Stripe Checkout session
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             mode='subscription',
             line_items=[{"price": stripe_price_id, "quantity": 1}],
-            metadata={'user_id': user.id},
+            metadata={
+                'user_id': user.id,       # Pass the user ID to link the subscription
+                'plan_id': plan.id,       # Pass the plan ID to associate with the membership
+            },
             success_url=request.build_absolute_uri('/membership-management/'),
             cancel_url=request.build_absolute_uri('/membership-management/'),
         )
+
+        # Redirect to the checkout session
         return redirect(checkout_session.url, code=303)
+    except MembershipPlan.DoesNotExist:
+        messages.error(request, "Membership plan not found.")
+        return redirect("membership_management")
     except Exception as e:
+        # Log error and notify user
         messages.error(request, f"An error occurred: {str(e)}")
         print(f"Error creating Stripe Checkout Session: {e}")
         return redirect("membership_management")
