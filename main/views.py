@@ -277,7 +277,7 @@ def pay_january_rent(request):
             customer=user.profile.stripe_customer_id,
             payment_method_types=['card'],
             mode='payment',  # <-- KEY: one-time payment mode
-            line_items=[{"price": "price_1Qgc5308vvVeCKwuGhPUaSCq", "quantity": 1}],
+            line_items=[{"price": "price_1QgdQ608vvVeCKwuUX6OgsUY", "quantity": 1}],
             metadata={
                 'user_id': user.id,
                 'plan_id': 1,  # So your webhook can see which plan
@@ -299,7 +299,7 @@ def pay_january_rent(request):
 @login_required
 def pay_membership(request):
     user = request.user
-    stripe_product_id = 'prod_RZe4LGYSdPmdOw'  # Example product ID (from MembershipPlan)
+    stripe_product_id = 'prod_RZn1bb7U5b2DWc'  # Example product ID (from MembershipPlan)
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
