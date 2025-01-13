@@ -12,22 +12,6 @@
         padding: 10px;
     }
 
-    .back-icon {
-        position: absolute;
-        top: 10px;
-        left: 10px;
-        font-size: 18px;
-        color: #ccc;
-        text-decoration: none;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    .back-icon:hover {
-        color: #fff;
-    }
-
     .header {
         text-align: center;
         font-size: 24px;
@@ -156,11 +140,6 @@
 {% endblock %}
 
 {% block content %}
-<!-- Back Button -->
-<a href="/" class="back-icon" title="Back to Home">
-    &#8592; Back
-</a>
-
 <!-- Messages (placed just above the header) -->
 {% if messages %}
     <div class="messages">

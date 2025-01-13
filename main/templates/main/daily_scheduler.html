@@ -18,7 +18,7 @@
     /* Back button in upper-left corner */
     .back-icon {
         position: absolute;
-        top: 10px;
+        top: 20px;
         left: 10px;
         font-size: 18px;
         color: #ccc;
@@ -81,8 +81,11 @@
         font-size: 12px;
         font-weight: bold;
     }
-    .nav-button:hover {
-        background-color: #444;
+
+    @media (hover: hover) and (pointer: fine) {
+        .nav-button:hover {
+            background-color: #444;
+        }
     }
 
     /* By default, keep the Book button space in the layout but hidden.
@@ -134,8 +137,10 @@
     .time-slot.requested { background-color: #666; }
 
     /* Hover for available slots (non-member) */
-    .time-slot.available:hover {
-        background-color: #777;
+    @media (hover: hover) and (pointer: fine) {
+        .time-slot.available:hover {
+            background-color: #777;
+        }
     }
 
     /* Selected by user -> green highlight */
@@ -143,9 +148,13 @@
         background-color: #27ae60;
         color: #fff;
     }
-    .time-slot.selected:hover {
-        background-color: #30cf73;
-        color: #fff;
+
+    /* Hover for available slots (non-member) */
+    @media (hover: hover) and (pointer: fine) {
+        .time-slot.selected:hover {
+            background-color: #30cf73;
+            color: #fff;
+        }
     }
 
     /* Hide the form's content only if you really need to,
@@ -171,6 +180,10 @@
 {% endblock %}
 
 {% block content %}
+<!-- Back Button -->
+<a href="/" class="back-icon" title="Back to Home">
+    &#8592; Back
+</a>
 
 <!-- Messages -->
 {% if messages %}
