@@ -149,32 +149,28 @@ def member_dashboard_view(request):
 @login_required
 def member_profile(request):
     """
-    Display the member's profile information and allow edits.
-    Restricts access for 'public' users.
+    Display/Edit the member's profile.
     """
     if request.user.profile.role == "public":
         return HttpResponseForbidden("You are not authorized to access this page.")
 
     if request.method == "POST":
-        # Update user profile info
-        user_profile = request.user.profile
-        user_profile.first_name = request.POST.get("first_name", user_profile.user.first_name)
-        user_profile.last_name = request.POST.get("last_name", user_profile.user.last_name)
-        user_profile.email = request.POST.get("email", user_profile.user.email)
-        user_profile.phone = request.POST.get("phone", user_profile.user.phone)
-        user_profile.save()
-
-        # Update Django's User model
+        # Update Django's built-in User fields
         user = request.user
         user.first_name = request.POST.get("first_name", user.first_name)
         user.last_name = request.POST.get("last_name", user.last_name)
         user.email = request.POST.get("email", user.email)
         user.save()
 
+        # Update your Profile model fields
+        user_profile = user.profile
+        user_profile.phone = request.POST.get("phone", user_profile.phone)
+        user_profile.save()
+
         messages.success(request, "Your profile has been updated.")
         return redirect("member_profile")
 
-    # Check membership
+    # On GET, add user to context so template can fill in existing values
     try:
         membership = request.user.usermembership
         membership_status = "Paid" if membership.active else "Unpaid"
@@ -182,7 +178,8 @@ def member_profile(request):
         membership_status = "Unpaid"
 
     context = {
-        'membership_status': membership_status,
+        "user": request.user,  # so template can do {{ user.first_name }}, etc.
+        "membership_status": membership_status,
     }
     return render(request, "member/profile.html", context)
 
