@@ -47,10 +47,6 @@ def stripe_webhook(request):
         elif session.get('metadata') and 'reservation_id' in session['metadata']:
             # Handle single session reservation
             handle_reservation_payment(session)
-        # 3) One-time membership purchase
-        elif session.get('metadata') and 'plan_id' in session['metadata']:
-            # No subscription, but we do have a plan_id → one-time membership
-            handle_one_time_membership_payment(session)
         else:
             # Log unrecognized session type for debugging
             print(f"Unrecognized session type: {session}")
@@ -166,45 +162,6 @@ def handle_recurring_payment(subscription_id):
     except Exception as e:
         print(f"Error in handle_recurring_payment: {e}")
 
-def handle_one_time_membership_payment(session):
-    """
-    Example: user pays once for "January Rent" but we mark the membership
-    as inactive, only storing a date. Maybe you handle activation differently.
-    """
-    try:
-        user_id = session['metadata']['user_id']
-        plan_id = session['metadata']['plan_id']
-        user = User.objects.get(id=user_id)
-        plan = MembershipPlan.objects.get(id=plan_id)
-
-        # Get or create user membership
-        membership, created = UserMembership.objects.get_or_create(user=user)
-
-        # Mark membership as NOT active, but set an expiration date
-        membership.active = True
-        membership.plan = plan
-        membership.stripe_subscription_id = None  # no subscription (one-time)
-        membership.next_billing_date = None
-        membership.valid_until = date(2025, 1, 31)  # or whatever date
-
-        if created or membership.credits == 0:
-            membership.credits = 100  # or 0, depending on your logic
-
-        membership.save()
-
-        # Maybe send an email confirming payment was received
-        send_membership_confirmation_email(user)
-
-        print("One-time membership payment processed (inactive membership).")
-
-    except KeyError:
-        print("No 'user_id' or 'plan_id' in checkout.session.metadata.")
-    except User.DoesNotExist:
-        print(f"User with ID {session['metadata'].get('user_id')} not found.")
-    except MembershipPlan.DoesNotExist:
-        print(f"Membership plan with ID {session['metadata'].get('plan_id')} not found.")
-    except Exception as e:
-        print(f"Error in handle_one_time_membership_payment: {e}")
 
 def handle_failed_payment(subscription_id):
     """

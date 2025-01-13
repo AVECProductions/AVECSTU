@@ -54,7 +54,7 @@ class UserProfileAdmin(admin.ModelAdmin):
 
 @admin.register(MembershipPlan)
 class MembershipPlanAdmin(admin.ModelAdmin):
-    list_display = ("name", "price", "stripe_price_id")
+    list_display = ("name", "stripe_product_id")
     search_fields = ("name",)
 
 

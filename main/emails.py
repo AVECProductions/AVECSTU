@@ -345,3 +345,48 @@ def send_reservation_payment_confirmation_email(reservation):
 
     except Exception as e:
         print(f"Failed to send reservation confirmation email: {e}")
+
+def send_recurring_payment_confirmation_email(user, credits, next_billing_date):
+    """
+    Sends an email confirmation for a successful recurring payment.
+    """
+    try:
+        email_content = f"""
+        <div style="font-family: Arial, sans-serif; font-size:16px; color:#333; line-height:1.5; margin:0 auto; max-width:600px; padding:20px;">
+            <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">Membership Payment Successful</h2>
+            <p>Hi {user.first_name},</p>
+            <p>We have successfully processed your recurring membership payment. Here are the details:</p>
+            <ul>
+                <li><strong>Next Billing Date:</strong> {next_billing_date.strftime('%B %d, %Y')}</li>
+                <li><strong>Updated Credits:</strong> {credits} hours</li>
+            </ul>
+            <p>Thank you for being a valued member of AVEC Studios!</p>
+            <p>Best regards,<br>AVEC Studios Team</p>
+        </div>
+        """
+        msg = EmailMessage(
+            subject="Membership Payment Successful",
+            body=email_content,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        msg.content_subtype = "html"
+        msg.send()
+    except Exception as e:
+        print(f"Failed to send recurring payment confirmation email: {e}")
+
+def send_cancellation_scheduled_email(user, valid_until):
+    """
+    Sends an email notifying the user that their membership will be canceled at the end of the billing cycle.
+    """
+    subject = "Your Membership Cancellation is Scheduled"
+    message = f"""
+    Hi {user.first_name},
+
+    Your membership cancellation has been scheduled. Your membership will remain active until {valid_until}.
+    If you'd like to reactivate your membership before that date, you can do so through your membership portal.
+
+    Thank you,
+    The Team
+    """
+    user.email_user(subject, message)

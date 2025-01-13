@@ -22,9 +22,10 @@ urlpatterns = [
     path('register/<str:token>/', register_view, name='register'),
     path('member-dashboard/', member_dashboard_view, name='member_dashboard'),
     path("admin-dashboard/", admin_dashboard, name="admin_dashboard"),
-    path("pay-membership/", pay_membership, name="pay_membership"),
+    path("pay-membership/", pay_january_rent, name="pay_membership"),
     path("cancel-membership/", cancel_membership, name="cancel_membership"),
     path('session-manager/', session_manager_view, name='session_manager'),
     path('member-profile/', member_profile, name='member_profile'),
     path("membership-management/", membership_management_view, name="membership_management"),
+    path('customer-portal/', customer_portal_view, name='customer_portal'),
 ]

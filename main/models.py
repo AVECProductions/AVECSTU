@@ -11,6 +11,8 @@ class PendingSessionRequest(models.Model):
     """
     Holds session requests that are not immediately confirmed.
     """
+    DoesNotExist = None
+
     class Meta:
         db_table = "pending_sessions"
 
@@ -103,8 +105,7 @@ class MembershipPlan(models.Model):
         db_table = "membership_plan"
 
     name = models.CharField(max_length=100)
-    price = models.DecimalField(max_digits=8, decimal_places=2)
-    stripe_price_id = models.CharField(max_length=100, unique=True)
+    stripe_product_id = models.CharField(max_length=100, default="prod_123")  # Reference to Stripe product
 
     def __str__(self):
         return self.name
@@ -194,6 +195,7 @@ class UserProfile(models.Model):
         default="public"  # or "member", depending on your default
     )
     phone = models.CharField(max_length=15, null=True, blank=True)
+    stripe_customer_id = models.CharField(max_length=255, unique=True, null=True, blank=True)  # Add this field
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"

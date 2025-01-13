@@ -13,6 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.urls import reverse
 from datetime import datetime
 import calendar
+import stripe
 
 # Models & Forms
 from .models import (
@@ -28,7 +29,8 @@ from .forms import ProfileUpdateForm
 # Services & Emails
 from .services import (
     cancel_stripe_subscription,
-    has_membership_access
+    has_membership_access,
+    create_stripe_customer
 )
 from .emails import (
     send_rejection_email,
@@ -195,22 +197,29 @@ def membership_management_view(request):
     try:
         membership = request.user.usermembership
 
-        # Determine membership status based on active and valid_until
-        if membership.valid_until and membership.valid_until >= date.today():
-            membership_status = f"Paid - Valid until {membership.valid_until}"
+        # Determine membership status and context values
+        if membership.active:
+            membership_status = "Active"
+            valid_until_display = None  # Do not display "Valid Until" if membership is active
+            next_billing_date = membership.next_billing_date
         else:
-            membership_status = "Unpaid"
+            membership_status = "Inactive"
+            if membership.valid_until and membership.valid_until >= date.today():
+                valid_until_display = membership.valid_until  # Show "Valid Until" if still in the future
+            else:
+                valid_until_display = None  # Do not display "Valid Until" if date is in the past
+            next_billing_date = None  # No next billing date for inactive memberships
 
         context = {
             "membership_status": membership_status,
             "membership_plan": membership.plan.name if membership.plan else "No Plan",
             "credits": membership.credits,
-            "next_billing_date": membership.next_billing_date,
-            "valid_until": membership.valid_until,
+            "next_billing_date": next_billing_date,
+            "valid_until": valid_until_display,
         }
     except UserMembership.DoesNotExist:
         context = {
-            "membership_status": "Unpaid",
+            "membership_status": "Inactive",
             "membership_plan": None,
             "credits": 0,
             "next_billing_date": None,
@@ -218,6 +227,7 @@ def membership_management_view(request):
         }
 
     return render(request, "member/membership_management.html", context)
+
 
 
 
@@ -257,44 +267,86 @@ def session_manager_view(request):
 # Membership Payment Views
 # ------------------------------------------
 @login_required
-def pay_membership(request):
-    """
-    Redirects the user to Stripe Checkout for membership payment.
-    """
+def pay_january_rent(request):
     user = request.user
-    stripe_price_id = "price_1Qaizu08vvVeCKwuAKr9zXca"  # Example price ID
-
-    import stripe
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
     try:
-        # Retrieve the membership plan
-        plan = MembershipPlan.objects.get(stripe_price_id=stripe_price_id)
-
-        # Create a Stripe Checkout session
+        # Create a one-time payment Checkout Session
         checkout_session = stripe.checkout.Session.create(
+            customer=user.profile.stripe_customer_id,
             payment_method_types=['card'],
-            mode='subscription',
-            line_items=[{"price": stripe_price_id, "quantity": 1}],
+            mode='payment',  # <-- KEY: one-time payment mode
+            line_items=[{"price": "price_1Qgc5308vvVeCKwuGhPUaSCq", "quantity": 1}],
             metadata={
-                'user_id': user.id,       # Pass the user ID to link the subscription
-                'plan_id': plan.id,       # Pass the plan ID to associate with the membership
+                'user_id': user.id,
+                'plan_id': 1,  # So your webhook can see which plan
             },
             success_url=request.build_absolute_uri('/membership-management/'),
             cancel_url=request.build_absolute_uri('/membership-management/'),
         )
 
-        # Redirect to the checkout session
+        return redirect(checkout_session.url, code=303)
+
+    except MembershipPlan.DoesNotExist:
+        messages.error(request, "Membership plan not found.")
+        return redirect("membership_management")
+    except Exception as e:
+        messages.error(request, f"An error occurred: {str(e)}")
+        print(f"Error creating Stripe Checkout Session: {e}")
+        return redirect("membership_management")
+
+@login_required
+def pay_membership(request):
+    user = request.user
+    stripe_product_id = 'prod_RZe4LGYSdPmdOw'  # Example product ID (from MembershipPlan)
+
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+
+    try:
+        # Retrieve the membership plan
+        plan = MembershipPlan.objects.get(stripe_product_id=stripe_product_id)
+
+        # Fetch active prices for the product from Stripe
+        product_prices = stripe.Price.list(product=stripe_product_id, active=True)
+        stripe_price_id = product_prices['data'][0]['id']  # Use the first active price
+
+        # Calculate the timestamp for the first day of the next month
+        today = localtime(now()).date()
+        if today.month < 12:
+            first_of_next_month = today.replace(month=today.month + 1, day=1)
+        else:
+            first_of_next_month = today.replace(year=today.year + 1, month=1, day=1)
+
+        # Convert to Unix timestamp using datetime.combine()
+        billing_cycle_anchor = int(datetime.combine(first_of_next_month, datetime.min.time()).timestamp())
+
+        # Create a Stripe Checkout session
+        checkout_session = stripe.checkout.Session.create(
+            customer=user.profile.stripe_customer_id,  # Attach the Stripe customer ID
+            payment_method_types=['card'],
+            mode='subscription',
+            line_items=[{"price": stripe_price_id, "quantity": 1}],
+            metadata={
+                'user_id': user.id,
+                'plan_id': plan.id,
+            },
+            subscription_data={
+                'billing_cycle_anchor': billing_cycle_anchor,
+                'proration_behavior': 'none',  # Prorate remaining days in the current month
+            },
+            success_url=request.build_absolute_uri('/membership-management/'),
+            cancel_url=request.build_absolute_uri('/membership-management/'),
+        )
+
         return redirect(checkout_session.url, code=303)
     except MembershipPlan.DoesNotExist:
         messages.error(request, "Membership plan not found.")
         return redirect("membership_management")
     except Exception as e:
-        # Log error and notify user
         messages.error(request, f"An error occurred: {str(e)}")
         print(f"Error creating Stripe Checkout Session: {e}")
         return redirect("membership_management")
-
 
 @login_required
 def cancel_membership(request):
@@ -322,6 +374,24 @@ def cancel_membership(request):
         messages.error(request, "You do not have a membership to cancel.")
 
     return redirect("membership_management")
+
+@login_required
+def customer_portal_view(request):
+    try:
+        portal_url = generate_customer_portal_link(request)
+        return redirect(portal_url)
+    except Exception as e:
+        messages.error(request, "An error occurred. Please try again later.")
+        return redirect("membership_management")
+
+def generate_customer_portal_link(request):
+    stripe.api_key = settings.STRIPE_SECRET_KEY
+    portal_session = stripe.billing_portal.Session.create(
+        customer=request.user.profile.stripe_customer_id,
+        return_url=request.build_absolute_uri('/membership-management/'),  # Redirect after portal use
+    )
+    return portal_session.url
+
 
 
 # ------------------------------------------
@@ -699,7 +769,8 @@ def create_invite_view(request):
 def register_view(request, token):
     """
     A user clicks an invite link to register.
-    Validates token, creates new User with the specified role.
+    Validates token, creates new User with the specified role, sets up profile fields,
+    and creates a Stripe customer.
     """
     invite = get_object_or_404(Invite, token=token)
 
@@ -709,14 +780,65 @@ def register_view(request, token):
     if request.method == "POST":
         username = request.POST.get("username")
         password = request.POST.get("password")
+        confirm_password = request.POST.get("confirm_password")  # new
+        first_name = request.POST.get("first_name")
+        last_name = request.POST.get("last_name")
+        phone = request.POST.get("phone")
 
-        user = User.objects.create_user(username=username, email=invite.email, password=password)
+        # 1) Check if passwords match
+        if password != confirm_password:
+            # Re-render the form with an error, keeping other fields filled in
+            return render(
+                request,
+                "credential/register.html",
+                {
+                    "invite": invite,
+                    "error": "Passwords do not match. Please try again.",
+                    "username": username,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "phone": phone,
+                },
+            )
+
+        # 3) Create the user if passwords match
+        user = User.objects.create_user(
+            username=username,
+            email=invite.email,  # Use email from the invite
+            password=password,
+            first_name=first_name,
+            last_name=last_name
+        )
+
+        # Assign invite role & phone
         user.profile.role = invite.role
-        user.save()
+        user.profile.phone = phone
 
+        try:
+            # Create a Stripe customer
+            stripe_customer_id = create_stripe_customer(
+                email=invite.email,
+                first_name=first_name,
+                last_name=last_name
+            )
+            user.profile.stripe_customer_id = stripe_customer_id
+            user.profile.save()
+
+        except Exception as e:
+            # Handle errors and rollback user creation if needed
+            print(f"Error creating Stripe customer: {e}")
+            user.delete()  # Rollback user creation
+            return render(
+                request,
+                "error.html",
+                {"message": "Error creating Stripe customer. Please try again later."}
+            )
+
+        # Mark the invite as used
         invite.is_used = True
         invite.save()
 
+        # Log the user in and redirect
         login(request, user)
         return redirect("home")
 
