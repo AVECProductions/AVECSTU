@@ -14,6 +14,7 @@ from django.urls import reverse
 from datetime import datetime
 import calendar
 import stripe
+from decouple import config
 
 # Models & Forms
 from .models import (
@@ -189,7 +190,7 @@ from datetime import date
 @login_required
 def membership_management_view(request):
     """
-    Allows members to view and manage their membership status.
+    Allows members to view and manage their subscription status.
     """
     try:
         membership = request.user.usermembership
@@ -295,8 +296,11 @@ def pay_january_rent(request):
 
 @login_required
 def pay_membership(request):
+    """
+    Creates a Stripe Checkout session for subscription-based membership.
+    """
     user = request.user
-    stripe_product_id = 'prod_RZn1bb7U5b2DWc'  # Example product ID (from MembershipPlan)
+    stripe_product_id = config('STRIPE_PRODUCT_ID')
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -308,29 +312,15 @@ def pay_membership(request):
         product_prices = stripe.Price.list(product=stripe_product_id, active=True)
         stripe_price_id = product_prices['data'][0]['id']  # Use the first active price
 
-        # Calculate the timestamp for the first day of the next month
-        today = localtime(now()).date()
-        if today.month < 12:
-            first_of_next_month = today.replace(month=today.month + 1, day=1)
-        else:
-            first_of_next_month = today.replace(year=today.year + 1, month=1, day=1)
-
-        # Convert to Unix timestamp using datetime.combine()
-        billing_cycle_anchor = int(datetime.combine(first_of_next_month, datetime.min.time()).timestamp())
-
-        # Create a Stripe Checkout session
+        # Create a Stripe Checkout session for recurring subscription
         checkout_session = stripe.checkout.Session.create(
-            customer=user.profile.stripe_customer_id,  # Attach the Stripe customer ID
+            customer=user.profile.stripe_customer_id,
             payment_method_types=['card'],
-            mode='subscription',
+            mode='subscription',  # This is key - sets up recurring billing
             line_items=[{"price": stripe_price_id, "quantity": 1}],
             metadata={
                 'user_id': user.id,
                 'plan_id': plan.id,
-            },
-            subscription_data={
-                'billing_cycle_anchor': billing_cycle_anchor,
-                'proration_behavior': 'none',  # Prorate remaining days in the current month
             },
             success_url=request.build_absolute_uri('/membership-management/'),
             cancel_url=request.build_absolute_uri('/membership-management/'),

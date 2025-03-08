@@ -5,7 +5,8 @@ from .models import (
     # Operator,  # If you no longer need it, comment out or remove
     UserProfile,
     MembershipPlan,
-    UserMembership
+    UserMembership,
+    Invite
 )
 
 @admin.register(PendingSessionRequest)
@@ -63,3 +64,11 @@ class UserMembershipAdmin(admin.ModelAdmin):
     list_display = ("user", "plan", "active", "credits", "start_date", "end_date")
     list_filter = ("active", "start_date", "end_date")
     search_fields = ("user__username", "plan__name")
+
+
+@admin.register(Invite)
+class InviteAdmin(admin.ModelAdmin):
+    list_display = ("email", "role", "token", "expires_at", "is_used")
+    list_filter = ("role", "is_used", "expires_at")
+    search_fields = ("email", "token")
+    readonly_fields = ("token",)

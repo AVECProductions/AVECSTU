@@ -123,7 +123,7 @@ class UserMembership(models.Model):
     start_date = models.DateField(auto_now_add=True)
     end_date = models.DateField(null=True, blank=True)  # Set on explicit end (optional)
     active = models.BooleanField(default=False)
-    stripe_subscription_id = models.CharField(max_length=100, unique=True, null=True)
+    stripe_subscription_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
 
     credits = models.PositiveIntegerField(default=0)
     next_billing_date = models.DateField(null=True, blank=True)  # Next payment due date
