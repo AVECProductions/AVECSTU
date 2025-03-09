@@ -93,7 +93,10 @@ def handle_successful_payment(session):
 
         # Get or create the user's membership
         membership, created = UserMembership.objects.get_or_create(user=user)
-
+        
+        # Check if this is a reactivation
+        reactivation = not created and not membership.active
+        
         # Update membership details
         membership.active = True
         membership.plan = plan  # Assign the membership plan
@@ -107,12 +110,19 @@ def handle_successful_payment(session):
         # Set billing dates and default credits
         membership.next_billing_date = next_billing_date
         membership.valid_until = next_billing_date
-        if created or membership.credits == 0:  # Assign 100 credits only if newly created or credits are 0
+        
+        # Assign credits if new or reactivating with zero credits
+        if created or membership.credits == 0:
             membership.credits = 100
+            
         membership.save()
 
         # Send confirmation email
-        send_membership_confirmation_email(user)
+        if reactivation:
+            # You could create a specific reactivation email
+            send_membership_confirmation_email(user, reactivation=True)
+        else:
+            send_membership_confirmation_email(user)
 
     except KeyError:
         print("No 'user_id' or 'plan_id' in checkout.session.metadata.")
@@ -147,13 +157,25 @@ def handle_recurring_payment(subscription_id):
         # Update membership details
         membership.next_billing_date = next_billing_date
         membership.valid_until = next_billing_date
+        
+        # Check if membership was inactive and reactivate it
+        was_inactive = not membership.active
+        if was_inactive:
+            print(f"Reactivating previously inactive membership for user {membership.user.username}")
+            membership.active = True
+            # You might want to send a special reactivation email here
 
         # Add recurring credits
         membership.credits += 100  # Add 100 credits each billing cycle
         membership.save()
 
         # Send notification email
-        send_recurring_payment_confirmation_email(membership.user, membership.credits, next_billing_date)
+        if was_inactive:
+            # Send reactivation email
+            send_membership_confirmation_email(membership.user)  # Or create a specific reactivation email
+        else:
+            # Send regular recurring payment email
+            send_recurring_payment_confirmation_email(membership.user, membership.credits, next_billing_date)
 
         print(f"Recurring payment processed for user {membership.user.username}")
 

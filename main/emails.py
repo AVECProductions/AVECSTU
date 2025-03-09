@@ -33,29 +33,38 @@ def send_payment_failure_email(user):
         print(f"Failed to send payment failure email: {e}")
 
 
-def send_membership_confirmation_email(user):
+def send_membership_confirmation_email(user, reactivation=False):
     """
-    Sends a confirmation email upon successful subscription.
+    Sends a confirmation email when a user's membership is activated or reactivated.
     """
-    try:
-        email_content = f"""
-        <div>
-            <h2>Membership Activated</h2>
-            <p>Hi {user.first_name},</p>
-            <p>Your membership has been successfully activated. Thank you for subscribing!</p>
-            <p>Best regards,<br>AVEC Studios</p>
-        </div>
+    subject = "Welcome to AVEC Studios Membership!" if not reactivation else "Your AVEC Studios Membership has been reactivated!"
+    
+    if reactivation:
+        message = f"""
+        Hello {user.first_name},
+        
+        Your AVEC Studios membership has been successfully reactivated.
+        
+        Best regards,
+        The AVEC Studios Team
         """
-        msg = EmailMessage(
-            subject="Membership Confirmation",
-            body=email_content,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email],
-        )
-        msg.content_subtype = "html"
-        msg.send()
-    except Exception as e:
-        print(f"Failed to send membership confirmation email: {e}")
+    else:
+        message = f"""
+        Hello {user.first_name},
+        
+        Your AVEC Studios membership has been successfully activated.
+        
+        Best regards,
+        The AVEC Studios Team
+        """
+    
+    email = EmailMessage(
+        subject,
+        message,
+        settings.DEFAULT_FROM_EMAIL,
+        [user.email],
+    )
+    email.send()
 
 
 def send_cancelation_confirmation_email(user):
@@ -210,10 +219,10 @@ def send_invite_email(invite, role):
     registration_link = f"{settings.BASE_URL}/register/{invite.token}/"
     expires_str = invite.expires_at.strftime('%Y-%m-%d %H:%M:%S')
 
-    email_subject = "You’re Invited to Join AVEC Studios"
+    email_subject = "You're Invited to Join AVEC Studios"
     email_body = f"""
     <div style="font-family:Arial, sans-serif; font-size:16px; color:#333; line-height:1.5; margin:0 auto; max-width:600px; padding:20px;">
-        <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">You’re Invited to Join AVEC Studios</h2>
+        <h2 style="font-size:24px; font-weight:bold; text-align:center; color:#333;">You're Invited to Join AVEC Studios</h2>
         <p>Hi,</p>
         <p>You have been invited to join AVEC Studios as a {role}. Click below to complete your registration:</p>
         <div style="text-align:center; margin:30px 0;">
@@ -223,7 +232,7 @@ def send_invite_email(invite, role):
             </a>
         </div>
         <p>This link expires on {expires_str}.</p>
-        <p>If you didn’t expect this email, you can ignore it.</p>
+        <p>If you didn't expect this email, you can ignore it.</p>
         <p>Regards,<br>AVEC Studios Team</p>
     </div>
     """
