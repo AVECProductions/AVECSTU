@@ -300,7 +300,12 @@ def pay_membership(request):
     Creates a Stripe Checkout session for subscription-based membership.
     """
     user = request.user
-    stripe_product_id = config('STRIPE_PRODUCT_ID')
+    
+    # Determine which product to use based on discount eligibility
+    if user.profile.discount:
+        stripe_product_id = config('STRIPE_DISCOUNT_PRODUCT_ID')
+    else:
+        stripe_product_id = config('STRIPE_PRODUCT_ID')
 
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
@@ -310,13 +315,17 @@ def pay_membership(request):
 
         # Fetch active prices for the product from Stripe
         product_prices = stripe.Price.list(product=stripe_product_id, active=True)
+        if not product_prices['data']:
+            messages.error(request, "No active prices found for this product.")
+            return redirect("membership_management")
+            
         stripe_price_id = product_prices['data'][0]['id']  # Use the first active price
 
         # Create a Stripe Checkout session for recurring subscription
         checkout_session = stripe.checkout.Session.create(
             customer=user.profile.stripe_customer_id,
             payment_method_types=['card'],
-            mode='subscription',  # This is key - sets up recurring billing
+            mode='subscription',
             line_items=[{"price": stripe_price_id, "quantity": 1}],
             metadata={
                 'user_id': user.id,

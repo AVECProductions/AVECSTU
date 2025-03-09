@@ -192,10 +192,11 @@ class UserProfile(models.Model):
     role = models.CharField(
         max_length=10,
         choices=ROLE_CHOICES,
-        default="public"  # or "member", depending on your default
+        default="public"
     )
     phone = models.CharField(max_length=15, null=True, blank=True)
-    stripe_customer_id = models.CharField(max_length=255, unique=True, null=True, blank=True)  # Add this field
+    stripe_customer_id = models.CharField(max_length=255, unique=True, null=True, blank=True)
+    discount = models.BooleanField(default=False)  # New field for discount eligibility
 
     def __str__(self):
         return f"{self.user.username} - {self.role}"
