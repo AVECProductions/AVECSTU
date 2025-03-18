@@ -6,6 +6,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Title{% endblock %}</title>
     <link rel="icon" type="image/png" href="{% static 'favicon.png' %}">
+    
+    <!-- iOS home screen icon - current configuration -->
+    <link rel="apple-touch-icon" sizes="180x180" href="{% static 'apple-touch-icon.png' %}">
+    
+    <!-- Add these additional meta tags for better iOS support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="AVEC Studios">
+    
     {% block extra_styles %}{% endblock %}
     <style>
         /* General Header Styles */
