@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import path
+from django.views.generic.base import RedirectView
+from django.contrib.staticfiles.storage import staticfiles_storage
 from main.views import *
 from decouple import config
 from django.contrib.auth import views as auth_views
@@ -28,4 +30,14 @@ urlpatterns = [
     path('member-profile/', member_profile, name='member_profile'),
     path("membership-management/", membership_management_view, name="membership_management"),
     path('customer-portal/', customer_portal_view, name='customer_portal'),
+    path('apple-touch-icon.png', 
+         RedirectView.as_view(url=staticfiles_storage.url('apple-touch-icon.png'))),
+    path('apple-touch-icon-precomposed.png', 
+         RedirectView.as_view(url=staticfiles_storage.url('apple-touch-icon.png'))),
+    path('apple-touch-icon-120x120.png', 
+         RedirectView.as_view(url=staticfiles_storage.url('apple-touch-icon.png'))),
+    path('apple-touch-icon-120x120-precomposed.png', 
+         RedirectView.as_view(url=staticfiles_storage.url('apple-touch-icon.png'))),
+    path('favicon.ico', 
+         RedirectView.as_view(url=staticfiles_storage.url('favicon.png'))),
 ]
